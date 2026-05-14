@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pixel-grid-studio-v1'
+const CACHE_NAME = 'pixel-grid-studio-v2'
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -26,6 +26,19 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
+
+  if (request.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseToCache = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', responseToCache))
+          return response
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html'))),
+    )
+    return
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
