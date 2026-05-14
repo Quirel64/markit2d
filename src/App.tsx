@@ -4,11 +4,19 @@ import './App.css'
 type Tool = 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
 
-type ProjectPayload = {
+type ProjectPayloadV1 = {
   version: 1
   width: number
   height: number
   pixels: Pixel[]
+}
+
+type ProjectPayloadV2 = {
+  version: 2
+  width: number
+  height: number
+  palette: string[]
+  runs: Array<[number, number]>
 }
 
 const CANVAS_SIZE = 64
@@ -35,21 +43,45 @@ const clonePixels = (pixels: Pixel[]) => [...pixels]
 
 const indexOf = (x: number, y: number) => y * CANVAS_SIZE + x
 
-const encodeProject = (pixels: Pixel[]) => {
-  const payload: ProjectPayload = {
-    version: 1,
-    width: CANVAS_SIZE,
-    height: CANVAS_SIZE,
-    pixels,
-  }
+const toBase64Url = (value: string) =>
+  btoa(value).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
-  return `PGS1:${btoa(JSON.stringify(payload))}`
+const fromBase64Url = (value: string) => {
+  const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+
+  return atob(padded)
 }
 
-const decodeProject = (code: string) => {
-  const trimmed = code.trim()
-  const encoded = trimmed.startsWith('PGS1:') ? trimmed.slice(5) : trimmed
-  const payload = JSON.parse(atob(encoded)) as ProjectPayload
+const encodeProject = (pixels: Pixel[]) => {
+  const palette = Array.from(new Set(pixels.filter((pixel): pixel is string => Boolean(pixel))))
+  const colorIndexes = new Map(palette.map((pixel, index) => [pixel, index + 1]))
+  const runs: Array<[number, number]> = []
+
+  for (const pixel of pixels) {
+    const value = pixel ? colorIndexes.get(pixel) ?? 0 : 0
+    const lastRun = runs.at(-1)
+
+    if (lastRun && lastRun[0] === value) {
+      lastRun[1] += 1
+    } else {
+      runs.push([value, 1])
+    }
+  }
+
+  const payload: ProjectPayloadV2 = {
+    version: 2,
+    width: CANVAS_SIZE,
+    height: CANVAS_SIZE,
+    palette,
+    runs,
+  }
+
+  return `PGS2:${toBase64Url(JSON.stringify(payload))}`
+}
+
+const decodeProjectV1 = (encoded: string) => {
+  const payload = JSON.parse(atob(encoded)) as ProjectPayloadV1
 
   if (
     payload.version !== 1 ||
@@ -62,6 +94,40 @@ const decodeProject = (code: string) => {
   }
 
   return payload.pixels.map((pixel) => (typeof pixel === 'string' ? pixel : null))
+}
+
+const decodeProjectV2 = (encoded: string) => {
+  const payload = JSON.parse(fromBase64Url(encoded)) as ProjectPayloadV2
+
+  if (
+    payload.version !== 2 ||
+    payload.width !== CANVAS_SIZE ||
+    payload.height !== CANVAS_SIZE ||
+    !Array.isArray(payload.palette) ||
+    !Array.isArray(payload.runs)
+  ) {
+    throw new Error('Unsupported project code')
+  }
+
+  const decoded = payload.runs.flatMap(([paletteIndex, count]) => {
+    const fill = paletteIndex === 0 ? null : payload.palette[paletteIndex - 1]
+    return Array<Pixel>(count).fill(typeof fill === 'string' ? fill : null)
+  })
+
+  if (decoded.length !== CANVAS_SIZE * CANVAS_SIZE) {
+    throw new Error('Unsupported project code')
+  }
+
+  return decoded
+}
+
+const decodeProject = (code: string) => {
+  const trimmed = code.trim()
+
+  if (trimmed.startsWith('PGS2:')) return decodeProjectV2(trimmed.slice(5))
+  if (trimmed.startsWith('PGS1:')) return decodeProjectV1(trimmed.slice(5))
+
+  return decodeProjectV1(trimmed)
 }
 
 function App() {
