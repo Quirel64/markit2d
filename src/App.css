@@ -193,6 +193,20 @@ button:disabled {
   background: #ffffff;
 }
 
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: #0f766e;
+}
+
 .canvas-stage {
   display: grid;
   place-items: center;
@@ -234,6 +248,10 @@ button:disabled {
 
 .actions-panel button {
   width: 100%;
+}
+
+.hidden-input {
+  display: none;
 }
 
 .project-code textarea {

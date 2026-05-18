@@ -23,6 +23,7 @@ const CANVAS_SIZE = 64
 const VIEW_SIZE = 768
 const GRID_PRESETS = [8, 16, 32, 64]
 const BRUSH_PRESETS = [1, 3, 5]
+const EXPORT_SCALES = [1, 4, 8, 16]
 const STORAGE_KEY = 'pixel-grid-studio-draft'
 const PALETTE = [
   '#111827',
@@ -123,15 +124,18 @@ const decodeProjectV2 = (encoded: string) => {
 
 const decodeProject = (code: string) => {
   const trimmed = code.trim()
+  const prefix = trimmed.slice(0, 5).toUpperCase()
+  const encoded = trimmed.slice(5)
 
-  if (trimmed.startsWith('PGS2:')) return decodeProjectV2(trimmed.slice(5))
-  if (trimmed.startsWith('PGS1:')) return decodeProjectV1(trimmed.slice(5))
+  if (prefix === 'PGS2:') return decodeProjectV2(encoded)
+  if (prefix === 'PGS1:') return decodeProjectV1(encoded)
 
   return decodeProjectV1(trimmed)
 }
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const isDrawingRef = useRef(false)
   const lastPaintedRef = useRef<string | null>(null)
 
@@ -150,6 +154,8 @@ function App() {
   const [customColor, setCustomColor] = useState(PALETTE[0])
   const [gridSize, setGridSize] = useState(32)
   const [brushSize, setBrushSize] = useState(1)
+  const [exportScale, setExportScale] = useState(8)
+  const [exportTransparent, setExportTransparent] = useState(true)
   const [history, setHistory] = useState<Pixel[][]>([])
   const [future, setFuture] = useState<Pixel[][]>([])
   const [projectCode, setProjectCode] = useState('')
@@ -355,22 +361,94 @@ function App() {
 
   const exportPng = () => {
     const exportCanvas = document.createElement('canvas')
-    exportCanvas.width = CANVAS_SIZE
-    exportCanvas.height = CANVAS_SIZE
+    const exportSize = CANVAS_SIZE * exportScale
+    exportCanvas.width = exportSize
+    exportCanvas.height = exportSize
     const ctx = exportCanvas.getContext('2d')
     if (!ctx) return
+
+    ctx.imageSmoothingEnabled = false
+
+    if (!exportTransparent) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, exportSize, exportSize)
+    }
 
     pixels.forEach((pixel, index) => {
       if (!pixel) return
       ctx.fillStyle = pixel
-      ctx.fillRect(index % CANVAS_SIZE, Math.floor(index / CANVAS_SIZE), 1, 1)
+      ctx.fillRect(
+        (index % CANVAS_SIZE) * exportScale,
+        Math.floor(index / CANVAS_SIZE) * exportScale,
+        exportScale,
+        exportScale,
+      )
     })
 
     const link = document.createElement('a')
-    link.download = 'pixel-art.png'
+    link.download = `markit2d-${CANVAS_SIZE}x${CANVAS_SIZE}-${exportScale}x.png`
     link.href = exportCanvas.toDataURL('image/png')
     link.click()
-    setStatus('PNG exported')
+    setStatus(`PNG exported at ${exportScale}x`)
+  }
+
+  const importImage = (file: File) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      const image = new Image()
+
+      image.onload = () => {
+        const importCanvas = document.createElement('canvas')
+        importCanvas.width = CANVAS_SIZE
+        importCanvas.height = CANVAS_SIZE
+        const ctx = importCanvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return
+
+        ctx.imageSmoothingEnabled = true
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+
+        const scale = Math.min(CANVAS_SIZE / image.width, CANVAS_SIZE / image.height)
+        const width = Math.max(1, Math.round(image.width * scale))
+        const height = Math.max(1, Math.round(image.height * scale))
+        const x = Math.floor((CANVAS_SIZE - width) / 2)
+        const y = Math.floor((CANVAS_SIZE - height) / 2)
+
+        ctx.drawImage(image, x, y, width, height)
+
+        const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+        const importedPixels = makeBlankPixels()
+
+        for (let index = 0; index < importedPixels.length; index += 1) {
+          const dataIndex = index * 4
+          const alpha = data[dataIndex + 3]
+
+          if (alpha < 128) {
+            importedPixels[index] = null
+            continue
+          }
+
+          const red = data[dataIndex].toString(16).padStart(2, '0')
+          const green = data[dataIndex + 1].toString(16).padStart(2, '0')
+          const blue = data[dataIndex + 2].toString(16).padStart(2, '0')
+          importedPixels[index] = `#${red}${green}${blue}`
+        }
+
+        pushHistory()
+        setPixels(importedPixels)
+        setStatus('Image imported')
+      }
+
+      image.src = String(reader.result)
+    }
+
+    reader.readAsDataURL(file)
+  }
+
+  const handleImportChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) importImage(file)
+    event.target.value = ''
   }
 
   const copyProjectCode = async () => {
@@ -519,8 +597,42 @@ function App() {
 
           <div className="control-group">
             <span className="label">Export</span>
+            <div className="segmented">
+              {EXPORT_SCALES.map((preset) => (
+                <button
+                  className={exportScale === preset ? 'active' : ''}
+                  key={preset}
+                  onClick={() => setExportScale(preset)}
+                  type="button"
+                >
+                  {preset}x
+                </button>
+              ))}
+            </div>
+            <label className="toggle-field">
+              <input
+                checked={exportTransparent}
+                onChange={(event) => setExportTransparent(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Transparent PNG</span>
+            </label>
             <button onClick={exportPng} type="button">
               Download PNG
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="label">Import</span>
+            <input
+              accept="image/*"
+              className="hidden-input"
+              onChange={handleImportChange}
+              ref={importInputRef}
+              type="file"
+            />
+            <button onClick={() => importInputRef.current?.click()} type="button">
+              Import image
             </button>
             <button onClick={copyProjectCode} type="button">
               Copy project code
@@ -534,7 +646,7 @@ function App() {
             <textarea
               id="project-code"
               onChange={(event) => setProjectCode(event.target.value)}
-              placeholder="Paste a PGS1 project code"
+              placeholder="Paste a PGS2 project code"
               value={projectCode}
             />
             <button onClick={loadProjectCode} type="button">
