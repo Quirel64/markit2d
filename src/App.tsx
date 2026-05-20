@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-type Tool = 'pencil' | 'eraser' | 'fill'
+type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
 
 type ProjectPayloadV1 = {
@@ -24,6 +24,12 @@ const VIEW_SIZE = 768
 const GRID_PRESETS = [8, 16, 32, 64]
 const BRUSH_PRESETS = [1, 3, 5]
 const EXPORT_SCALES = [1, 4, 8, 16]
+const TOOLS: Array<{ id: Tool; icon: string; label: string }> = [
+  { id: 'view', icon: 'V', label: 'view' },
+  { id: 'pencil', icon: 'P', label: 'pencil' },
+  { id: 'eraser', icon: 'E', label: 'eraser' },
+  { id: 'fill', icon: 'F', label: 'fill' },
+]
 const STORAGE_KEY = 'pixel-grid-studio-draft'
 const PALETTE = [
   '#111827',
@@ -289,6 +295,8 @@ function App() {
 
   const applyTool = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (tool === 'view') return
+
       const point = pointToCell(event)
       if (!point) return
 
@@ -311,6 +319,8 @@ function App() {
   )
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (tool === 'view') return
+
     event.currentTarget.setPointerCapture(event.pointerId)
     isDrawingRef.current = true
     lastPaintedRef.current = null
@@ -320,7 +330,7 @@ function App() {
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current || tool === 'fill') return
+    if (!isDrawingRef.current || tool === 'fill' || tool === 'view') return
     applyTool(event)
   }
 
@@ -494,17 +504,17 @@ function App() {
           <div className="control-group">
             <span className="label">Tools</span>
             <div className="button-grid">
-              {(['pencil', 'eraser', 'fill'] as Tool[]).map((item) => (
+              {TOOLS.map((item) => (
                 <button
-                  className={tool === item ? 'tool-button active' : 'tool-button'}
-                  key={item}
-                  onClick={() => setTool(item)}
+                  className={tool === item.id ? 'tool-button active' : 'tool-button'}
+                  key={item.id}
+                  onClick={() => setTool(item.id)}
                   type="button"
                 >
                   <span className="tool-icon" aria-hidden="true">
-                    {item === 'pencil' ? 'P' : item === 'eraser' ? 'E' : 'F'}
+                    {item.icon}
                   </span>
-                  <span>{item}</span>
+                  <span>{item.label}</span>
                 </button>
               ))}
             </div>
@@ -570,7 +580,7 @@ function App() {
         <section className="canvas-stage" aria-label="Pixel canvas">
           <canvas
             aria-label="Drawing surface"
-            className="pixel-canvas"
+            className={tool === 'view' ? 'pixel-canvas view-mode' : 'pixel-canvas'}
             height={VIEW_SIZE}
             onPointerCancel={stopDrawing}
             onPointerDown={handlePointerDown}
