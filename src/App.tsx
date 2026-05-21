@@ -3,6 +3,7 @@ import './App.css'
 
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
+type MenuId = 'tools' | 'grid' | 'color' | 'project'
 
 type ProjectPayloadV1 = {
   version: 1
@@ -29,6 +30,12 @@ const TOOLS: Array<{ id: Tool; icon: string; label: string }> = [
   { id: 'pencil', icon: 'P', label: 'pencil' },
   { id: 'eraser', icon: 'E', label: 'eraser' },
   { id: 'fill', icon: 'F', label: 'fill' },
+]
+const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
+  { id: 'tools', icon: 'T', label: 'Tools' },
+  { id: 'grid', icon: 'G', label: 'Grid' },
+  { id: 'color', icon: 'C', label: 'Color' },
+  { id: 'project', icon: 'P', label: 'Project' },
 ]
 const STORAGE_KEY = 'pixel-grid-studio-draft'
 const PALETTE = [
@@ -166,6 +173,7 @@ function App() {
   const [future, setFuture] = useState<Pixel[][]>([])
   const [projectCode, setProjectCode] = useState('')
   const [status, setStatus] = useState('Ready')
+  const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -489,18 +497,14 @@ function App() {
     setColor(nextColor)
   }
 
-  return (
-    <main className="app-shell">
-      <section className="topbar">
-        <div>
-          <p className="eyebrow">Prototype</p>
-          <h1>Pixel Grid Studio</h1>
-        </div>
-        <div className="status">{status}</div>
-      </section>
+  const toggleMenu = (menuId: MenuId) => {
+    setActiveMenu((current) => (current === menuId ? current : menuId))
+  }
 
-      <section className="workspace">
-        <aside className="panel tools-panel" aria-label="Tools">
+  const renderActiveMenu = () => {
+    if (activeMenu === 'tools') {
+      return (
+        <>
           <div className="control-group">
             <span className="label">Tools</span>
             <div className="button-grid">
@@ -521,22 +525,6 @@ function App() {
           </div>
 
           <div className="control-group">
-            <span className="label">Grid</span>
-            <div className="segmented">
-              {GRID_PRESETS.map((preset) => (
-                <button
-                  className={gridSize === preset ? 'active' : ''}
-                  key={preset}
-                  onClick={() => setGridSize(preset)}
-                  type="button"
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="control-group">
             <span className="label">Brush</span>
             <div className="segmented">
               {BRUSH_PRESETS.map((preset) => (
@@ -551,32 +539,139 @@ function App() {
               ))}
             </div>
           </div>
+        </>
+      )
+    }
 
-          <div className="control-group">
-            <span className="label">Colors</span>
-            <div className="palette">
-              {PALETTE.map((swatch) => (
-                <button
-                  aria-label={`Use ${swatch}`}
-                  className={color === swatch ? 'swatch active' : 'swatch'}
-                  key={swatch}
-                  onClick={() => setColor(swatch)}
-                  style={{ backgroundColor: swatch }}
-                  type="button"
-                />
-              ))}
-            </div>
-            <label className="color-field">
-              <span>Custom</span>
-              <input
-                onChange={(event) => handleCustomColorChange(event.target.value)}
-                type="color"
-                value={customColor}
-              />
-            </label>
+    if (activeMenu === 'grid') {
+      return (
+        <div className="control-group">
+          <span className="label">Grid</span>
+          <div className="segmented">
+            {GRID_PRESETS.map((preset) => (
+              <button
+                className={gridSize === preset ? 'active' : ''}
+                key={preset}
+                onClick={() => setGridSize(preset)}
+                type="button"
+              >
+                {preset}
+              </button>
+            ))}
           </div>
-        </aside>
+        </div>
+      )
+    }
 
+    if (activeMenu === 'color') {
+      return (
+        <div className="control-group">
+          <span className="label">Colors</span>
+          <div className="palette">
+            {PALETTE.map((swatch) => (
+              <button
+                aria-label={`Use ${swatch}`}
+                className={color === swatch ? 'swatch active' : 'swatch'}
+                key={swatch}
+                onClick={() => setColor(swatch)}
+                style={{ backgroundColor: swatch }}
+                type="button"
+              />
+            ))}
+          </div>
+          <label className="color-field">
+            <span>Custom</span>
+            <input
+              onChange={(event) => handleCustomColorChange(event.target.value)}
+              type="color"
+              value={customColor}
+            />
+          </label>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <div className="control-group">
+          <span className="label">Export</span>
+          <div className="segmented">
+            {EXPORT_SCALES.map((preset) => (
+              <button
+                className={exportScale === preset ? 'active' : ''}
+                key={preset}
+                onClick={() => setExportScale(preset)}
+                type="button"
+              >
+                {preset}x
+              </button>
+            ))}
+          </div>
+          <label className="toggle-field">
+            <input
+              checked={exportTransparent}
+              onChange={(event) => setExportTransparent(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Transparent PNG</span>
+          </label>
+          <button onClick={exportPng} type="button">
+            Download PNG
+          </button>
+        </div>
+
+        <div className="control-group">
+          <span className="label">Import</span>
+          <input
+            accept="image/*"
+            className="hidden-input"
+            onChange={handleImportChange}
+            ref={importInputRef}
+            type="file"
+          />
+          <button onClick={() => importInputRef.current?.click()} type="button">
+            Import image
+          </button>
+          <button onClick={copyProjectCode} type="button">
+            Copy project code
+          </button>
+        </div>
+
+        <div className="control-group project-code">
+          <label className="label" htmlFor="project-code">
+            Load code
+          </label>
+          <textarea
+            id="project-code"
+            onChange={(event) => setProjectCode(event.target.value)}
+            placeholder="Paste a PGS2 project code"
+            value={projectCode}
+          />
+          <button onClick={loadProjectCode} type="button">
+            Load project
+          </button>
+        </div>
+
+        <div className="control-group">
+          <button className="danger" onClick={clearCanvas} type="button">
+            Clear canvas
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <main className="app-shell">
+      <section className="topbar">
+        <div>
+          <p className="eyebrow">Prototype</p>
+          <h1>Pixel Grid Studio</h1>
+        </div>
+        <div className="status">{status}</div>
+      </section>
+
+      <section className="workspace">
         <section className="canvas-stage" aria-label="Pixel canvas">
           <canvas
             aria-label="Drawing surface"
@@ -591,86 +686,38 @@ function App() {
             width={VIEW_SIZE}
           />
         </section>
-
-        <aside className="panel actions-panel" aria-label="Project actions">
-          <div className="control-group">
-            <span className="label">History</span>
-            <div className="action-row">
-              <button disabled={!history.length} onClick={undo} type="button">
-                Undo
-              </button>
-              <button disabled={!future.length} onClick={redo} type="button">
-                Redo
-              </button>
-            </div>
-          </div>
-
-          <div className="control-group">
-            <span className="label">Export</span>
-            <div className="segmented">
-              {EXPORT_SCALES.map((preset) => (
-                <button
-                  className={exportScale === preset ? 'active' : ''}
-                  key={preset}
-                  onClick={() => setExportScale(preset)}
-                  type="button"
-                >
-                  {preset}x
-                </button>
-              ))}
-            </div>
-            <label className="toggle-field">
-              <input
-                checked={exportTransparent}
-                onChange={(event) => setExportTransparent(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Transparent PNG</span>
-            </label>
-            <button onClick={exportPng} type="button">
-              Download PNG
-            </button>
-          </div>
-
-          <div className="control-group">
-            <span className="label">Import</span>
-            <input
-              accept="image/*"
-              className="hidden-input"
-              onChange={handleImportChange}
-              ref={importInputRef}
-              type="file"
-            />
-            <button onClick={() => importInputRef.current?.click()} type="button">
-              Import image
-            </button>
-            <button onClick={copyProjectCode} type="button">
-              Copy project code
-            </button>
-          </div>
-
-          <div className="control-group project-code">
-            <label className="label" htmlFor="project-code">
-              Load code
-            </label>
-            <textarea
-              id="project-code"
-              onChange={(event) => setProjectCode(event.target.value)}
-              placeholder="Paste a PGS2 project code"
-              value={projectCode}
-            />
-            <button onClick={loadProjectCode} type="button">
-              Load project
-            </button>
-          </div>
-
-          <div className="control-group">
-            <button className="danger" onClick={clearCanvas} type="button">
-              Clear canvas
-            </button>
-          </div>
-        </aside>
       </section>
+
+      <nav className="floating-rail" aria-label="Editor menus">
+        {MENUS.map((item) => (
+          <button
+            aria-label={item.label}
+            className={activeMenu === item.id ? 'rail-button active' : 'rail-button'}
+            key={item.id}
+            onClick={() => toggleMenu(item.id)}
+            title={item.label}
+            type="button"
+          >
+            {item.icon}
+          </button>
+        ))}
+      </nav>
+
+      <section className="floating-panel" aria-label={`${activeMenu} menu`}>
+        <div className="floating-panel-header">
+          <span className="label">{MENUS.find((item) => item.id === activeMenu)?.label}</span>
+        </div>
+        {renderActiveMenu()}
+      </section>
+
+      <div className="history-float" aria-label="History controls">
+        <button disabled={!history.length} onClick={undo} title="Undo" type="button">
+          Undo
+        </button>
+        <button disabled={!future.length} onClick={redo} title="Redo" type="button">
+          Redo
+        </button>
+      </div>
     </main>
   )
 }
