@@ -20,11 +20,6 @@ type GestureState = {
   lastDistance: number | null
 }
 
-type DrawerDragState = {
-  startY: number
-  startHeight: number
-}
-
 type ProjectPayloadV1 = {
   version: 1
   width: number
@@ -44,8 +39,6 @@ const CANVAS_SIZE = 64
 const VIEW_SIZE = 768
 const MIN_ZOOM = 1
 const MAX_ZOOM = 16
-const MIN_DRAWER_HEIGHT = 180
-const MAX_DRAWER_HEIGHT = 520
 const GRID_PRESETS = [8, 16, 32, 64]
 const BRUSH_PRESETS = [1, 3, 5]
 const EXPORT_SCALES = [1, 4, 8, 16]
@@ -209,7 +202,6 @@ function App() {
   const lastPaintedRef = useRef<string | null>(null)
   const activePointersRef = useRef(new Map<number, PointerPoint>())
   const gestureRef = useRef<GestureState>({ lastCenter: null, lastDistance: null })
-  const drawerDragRef = useRef<DrawerDragState | null>(null)
 
   const [pixels, setPixels] = useState<Pixel[]>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY)
@@ -235,7 +227,6 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
   const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
-  const [drawerHeight, setDrawerHeight] = useState(300)
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -709,36 +700,8 @@ function App() {
     setColor(nextColor)
   }
 
-  const startDrawerResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId)
-    drawerDragRef.current = {
-      startY: event.clientY,
-      startHeight: drawerHeight,
-    }
-  }
-
-  const resizeDrawer = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = drawerDragRef.current
-    if (!drag) return
-
-    const nextHeight = clamp(drag.startHeight + drag.startY - event.clientY, MIN_DRAWER_HEIGHT, MAX_DRAWER_HEIGHT)
-    setDrawerHeight(nextHeight)
-  }
-
-  const stopDrawerResize = () => {
-    drawerDragRef.current = null
-  }
-
   const toggleMenu = (menuId: MenuId) => {
-    setActiveMenu((current) => {
-      if (current === menuId) {
-        setIsMenuOpen((open) => !open)
-        return current
-      }
-
-      setIsMenuOpen(true)
-      return menuId
-    })
+    setActiveMenu(menuId)
   }
 
   const renderActiveMenu = () => {
@@ -941,50 +904,48 @@ function App() {
         </section>
       </section>
 
-      <section
-        className={isMenuOpen ? 'bottom-drawer open' : 'bottom-drawer'}
-        aria-hidden={!isMenuOpen}
-        aria-label={`${activeMenu} menu`}
-        style={{ height: drawerHeight }}
-      >
-        <div
-          aria-label="Resize menu"
-          className="drawer-handle"
-          onPointerCancel={stopDrawerResize}
-          onPointerDown={startDrawerResize}
-          onPointerMove={resizeDrawer}
-          onPointerUp={stopDrawerResize}
-          role="separator"
-        ></div>
-        <div className="floating-panel-header">
-          <span className="label">{MENUS.find((item) => item.id === activeMenu)?.label}</span>
-          <button className="drawer-close" onClick={() => setIsMenuOpen(false)} type="button">
-            Hide
-          </button>
-        </div>
-        <div className="drawer-content">{renderActiveMenu()}</div>
-      </section>
-
-      <nav className="bottom-toolbar" aria-label="Editor menus">
-        {MENUS.map((item) => (
-          <button
-            aria-label={item.label}
-            className={activeMenu === item.id && isMenuOpen ? 'rail-button active' : 'rail-button'}
-            key={item.id}
-            onClick={() => toggleMenu(item.id)}
-            title={item.label}
-            type="button"
-          >
-            {item.icon}
-          </button>
-        ))}
+      <div className="quick-controls" aria-label="Quick controls">
+        <button
+          aria-expanded={isMenuOpen}
+          className="menu-toggle"
+          onClick={() => setIsMenuOpen((open) => !open)}
+          title="Menu"
+          type="button"
+        >
+          Menu
+        </button>
         <button disabled={!history.length} onClick={undo} title="Undo" type="button">
           Undo
         </button>
         <button disabled={!future.length} onClick={redo} title="Redo" type="button">
           Redo
         </button>
-      </nav>
+      </div>
+
+      <aside className={isMenuOpen ? 'side-menu open' : 'side-menu'} aria-hidden={!isMenuOpen}>
+        <div className="side-menu-header">
+          <span className="label">Menu</span>
+          <button className="menu-close" onClick={() => setIsMenuOpen(false)} type="button">
+            Hide
+          </button>
+        </div>
+        <nav className="menu-tabs" aria-label="Editor menu sections">
+          {MENUS.map((item) => (
+            <button
+              aria-label={item.label}
+              className={activeMenu === item.id ? 'menu-tab active' : 'menu-tab'}
+              key={item.id}
+              onClick={() => toggleMenu(item.id)}
+              title={item.label}
+              type="button"
+            >
+              <span aria-hidden="true">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="side-menu-content">{renderActiveMenu()}</div>
+      </aside>
     </main>
   )
 }
