@@ -20,6 +20,11 @@ type GestureState = {
   lastDistance: number | null
 }
 
+type DrawerDragState = {
+  startY: number
+  startHeight: number
+}
+
 type ProjectPayloadV1 = {
   version: 1
   width: number
@@ -39,6 +44,8 @@ const CANVAS_SIZE = 64
 const VIEW_SIZE = 768
 const MIN_ZOOM = 1
 const MAX_ZOOM = 16
+const MIN_DRAWER_HEIGHT = 180
+const MAX_DRAWER_HEIGHT = 520
 const GRID_PRESETS = [8, 16, 32, 64]
 const BRUSH_PRESETS = [1, 3, 5]
 const EXPORT_SCALES = [1, 4, 8, 16]
@@ -94,6 +101,17 @@ const getCenter = (first: PointerPoint, second: PointerPoint) => ({
   x: (first.x + second.x) / 2,
   y: (first.y + second.y) / 2,
 })
+
+const hexToRgb = (hex: string) => {
+  const clean = hex.replace('#', '')
+  const value = Number.parseInt(clean, 16)
+
+  return {
+    red: (value >> 16) & 255,
+    green: (value >> 8) & 255,
+    blue: value & 255,
+  }
+}
 
 const toBase64Url = (value: string) =>
   btoa(value).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
@@ -191,6 +209,7 @@ function App() {
   const lastPaintedRef = useRef<string | null>(null)
   const activePointersRef = useRef(new Map<number, PointerPoint>())
   const gestureRef = useRef<GestureState>({ lastCenter: null, lastDistance: null })
+  const drawerDragRef = useRef<DrawerDragState | null>(null)
 
   const [pixels, setPixels] = useState<Pixel[]>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY)
@@ -216,6 +235,7 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
   const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
+  const [drawerHeight, setDrawerHeight] = useState(300)
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -230,26 +250,35 @@ function App() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const pixelScale = VIEW_SIZE / CANVAS_SIZE
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, VIEW_SIZE, VIEW_SIZE)
 
     ctx.fillStyle = '#f8fafc'
     ctx.fillRect(0, 0, VIEW_SIZE, VIEW_SIZE)
 
+    const artCanvas = document.createElement('canvas')
+    artCanvas.width = CANVAS_SIZE
+    artCanvas.height = CANVAS_SIZE
+    const artCtx = artCanvas.getContext('2d')
+    if (!artCtx) return
+
+    const imageData = artCtx.createImageData(CANVAS_SIZE, CANVAS_SIZE)
+    pixels.forEach((pixel, index) => {
+      if (!pixel) return
+
+      const { red, green, blue } = hexToRgb(pixel)
+      const dataIndex = index * 4
+      imageData.data[dataIndex] = red
+      imageData.data[dataIndex + 1] = green
+      imageData.data[dataIndex + 2] = blue
+      imageData.data[dataIndex + 3] = 255
+    })
+    artCtx.putImageData(imageData, 0, 0)
+
     ctx.save()
     ctx.translate(viewport.panX, viewport.panY)
     ctx.scale(viewport.zoom, viewport.zoom)
-
-    for (let y = 0; y < CANVAS_SIZE; y += 1) {
-      for (let x = 0; x < CANVAS_SIZE; x += 1) {
-        const fill = pixels[indexOf(x, y)]
-        if (fill) {
-          ctx.fillStyle = fill
-          ctx.fillRect(x * pixelScale, y * pixelScale, pixelScale, pixelScale)
-        }
-      }
-    }
+    ctx.drawImage(artCanvas, 0, 0, VIEW_SIZE, VIEW_SIZE)
 
     const gridStep = VIEW_SIZE / gridSize
     ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
@@ -304,6 +333,19 @@ function App() {
 
     return { cellX, cellY, x: cellX * blockSize, y: cellY * blockSize }
   }, [blockSize, pointerToCanvasPoint, viewport])
+
+  const zoomAtPoint = useCallback((point: PointerPoint, zoomFactor: number) => {
+    setViewport((current) => {
+      const nextZoom = clamp(current.zoom * zoomFactor, MIN_ZOOM, MAX_ZOOM)
+      const zoomRatio = nextZoom / current.zoom
+
+      return clampViewport({
+        zoom: nextZoom,
+        panX: point.x - (point.x - current.panX) * zoomRatio,
+        panY: point.y - (point.y - current.panY) * zoomRatio,
+      })
+    })
+  }, [])
 
   const paintBlock = useCallback(
     (nextPixels: Pixel[], cellX: number, cellY: number, nextColor: Pixel) => {
@@ -496,24 +538,26 @@ function App() {
     lastPaintedRef.current = null
   }
 
-  const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    if (tool !== 'view') return
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-    event.preventDefault()
-    const point = pointerToCanvasPoint(event)
-    if (!point) return
+    const handleNativeWheel = (event: WheelEvent) => {
+      if (tool !== 'view') return
 
-    setViewport((current) => {
-      const nextZoom = clamp(current.zoom * (event.deltaY > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM)
-      const zoomRatio = nextZoom / current.zoom
+      event.preventDefault()
+      const point = pointerToCanvasPoint(event)
+      if (!point) return
 
-      return clampViewport({
-        zoom: nextZoom,
-        panX: point.x - (point.x - current.panX) * zoomRatio,
-        panY: point.y - (point.y - current.panY) * zoomRatio,
-      })
-    })
-  }
+      zoomAtPoint(point, event.deltaY > 0 ? 0.9 : 1.1)
+    }
+
+    canvas.addEventListener('wheel', handleNativeWheel, { passive: false })
+
+    return () => {
+      canvas.removeEventListener('wheel', handleNativeWheel)
+    }
+  }, [pointerToCanvasPoint, tool, zoomAtPoint])
 
   const undo = () => {
     setHistory((items) => {
@@ -663,6 +707,26 @@ function App() {
   const handleCustomColorChange = (nextColor: string) => {
     setCustomColor(nextColor)
     setColor(nextColor)
+  }
+
+  const startDrawerResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    drawerDragRef.current = {
+      startY: event.clientY,
+      startHeight: drawerHeight,
+    }
+  }
+
+  const resizeDrawer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = drawerDragRef.current
+    if (!drag) return
+
+    const nextHeight = clamp(drag.startHeight + drag.startY - event.clientY, MIN_DRAWER_HEIGHT, MAX_DRAWER_HEIGHT)
+    setDrawerHeight(nextHeight)
+  }
+
+  const stopDrawerResize = () => {
+    drawerDragRef.current = null
   }
 
   const toggleMenu = (menuId: MenuId) => {
@@ -871,7 +935,6 @@ function App() {
             onPointerLeave={stopDrawing}
             onPointerMove={handlePointerMove}
             onPointerUp={stopDrawing}
-            onWheel={handleWheel}
             ref={canvasRef}
             width={VIEW_SIZE}
           />
@@ -882,8 +945,17 @@ function App() {
         className={isMenuOpen ? 'bottom-drawer open' : 'bottom-drawer'}
         aria-hidden={!isMenuOpen}
         aria-label={`${activeMenu} menu`}
+        style={{ height: drawerHeight }}
       >
-        <div className="drawer-handle"></div>
+        <div
+          aria-label="Resize menu"
+          className="drawer-handle"
+          onPointerCancel={stopDrawerResize}
+          onPointerDown={startDrawerResize}
+          onPointerMove={resizeDrawer}
+          onPointerUp={stopDrawerResize}
+          role="separator"
+        ></div>
         <div className="floating-panel-header">
           <span className="label">{MENUS.find((item) => item.id === activeMenu)?.label}</span>
           <button className="drawer-close" onClick={() => setIsMenuOpen(false)} type="button">

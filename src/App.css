@@ -296,9 +296,9 @@ button:disabled {
   bottom: 86px;
   display: grid;
   width: min(720px, calc(100vw - 24px));
-  max-height: min(48svh, 430px);
+  max-height: min(48svh, 520px);
   gap: 18px;
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
   border: 1px solid #d6dce7;
   border-radius: 8px;
@@ -320,11 +320,23 @@ button:disabled {
 }
 
 .drawer-handle {
-  width: 42px;
-  height: 4px;
-  margin: 0 auto -4px;
+  width: 62px;
+  height: 8px;
+  margin: 0 auto -2px;
   border-radius: 99px;
   background: #cbd5e1;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.drawer-handle::after {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin: 2px auto 0;
+  border-radius: 99px;
+  background: #94a3b8;
 }
 
 .floating-panel-header {
@@ -343,6 +355,9 @@ button:disabled {
 .drawer-content {
   display: grid;
   gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 2px;
 }
 
 .hidden-input {
@@ -404,7 +419,7 @@ button:disabled {
   .bottom-drawer {
     bottom: 78px;
     width: calc(100vw - 20px);
-    max-height: min(54svh, 390px);
+    max-height: min(54svh, 520px);
   }
 }
 
