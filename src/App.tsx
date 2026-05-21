@@ -4,6 +4,21 @@ import './App.css'
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
 type MenuId = 'tools' | 'grid' | 'color' | 'project'
+type Viewport = {
+  zoom: number
+  panX: number
+  panY: number
+}
+
+type PointerPoint = {
+  x: number
+  y: number
+}
+
+type GestureState = {
+  lastCenter: PointerPoint | null
+  lastDistance: number | null
+}
 
 type ProjectPayloadV1 = {
   version: 1
@@ -22,6 +37,8 @@ type ProjectPayloadV2 = {
 
 const CANVAS_SIZE = 64
 const VIEW_SIZE = 768
+const MIN_ZOOM = 1
+const MAX_ZOOM = 16
 const GRID_PRESETS = [8, 16, 32, 64]
 const BRUSH_PRESETS = [1, 3, 5]
 const EXPORT_SCALES = [1, 4, 8, 16]
@@ -56,6 +73,27 @@ const makeBlankPixels = () => Array<Pixel>(CANVAS_SIZE * CANVAS_SIZE).fill(null)
 const clonePixels = (pixels: Pixel[]) => [...pixels]
 
 const indexOf = (x: number, y: number) => y * CANVAS_SIZE + x
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const clampViewport = ({ zoom, panX, panY }: Viewport): Viewport => {
+  const nextZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM)
+  const minPan = VIEW_SIZE - VIEW_SIZE * nextZoom
+
+  return {
+    zoom: nextZoom,
+    panX: nextZoom === MIN_ZOOM ? 0 : clamp(panX, minPan, 0),
+    panY: nextZoom === MIN_ZOOM ? 0 : clamp(panY, minPan, 0),
+  }
+}
+
+const getDistance = (first: PointerPoint, second: PointerPoint) =>
+  Math.hypot(second.x - first.x, second.y - first.y)
+
+const getCenter = (first: PointerPoint, second: PointerPoint) => ({
+  x: (first.x + second.x) / 2,
+  y: (first.y + second.y) / 2,
+})
 
 const toBase64Url = (value: string) =>
   btoa(value).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
@@ -151,6 +189,8 @@ function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const isDrawingRef = useRef(false)
   const lastPaintedRef = useRef<string | null>(null)
+  const activePointersRef = useRef(new Map<number, PointerPoint>())
+  const gestureRef = useRef<GestureState>({ lastCenter: null, lastDistance: null })
 
   const [pixels, setPixels] = useState<Pixel[]>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY)
@@ -174,6 +214,8 @@ function App() {
   const [projectCode, setProjectCode] = useState('')
   const [status, setStatus] = useState('Ready')
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
+  const [isMenuOpen, setIsMenuOpen] = useState(true)
+  const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -188,29 +230,33 @@ function App() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const scale = VIEW_SIZE / CANVAS_SIZE
+    const pixelScale = VIEW_SIZE / CANVAS_SIZE
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, VIEW_SIZE, VIEW_SIZE)
 
     ctx.fillStyle = '#f8fafc'
     ctx.fillRect(0, 0, VIEW_SIZE, VIEW_SIZE)
 
+    ctx.save()
+    ctx.translate(viewport.panX, viewport.panY)
+    ctx.scale(viewport.zoom, viewport.zoom)
+
     for (let y = 0; y < CANVAS_SIZE; y += 1) {
       for (let x = 0; x < CANVAS_SIZE; x += 1) {
         const fill = pixels[indexOf(x, y)]
         if (fill) {
           ctx.fillStyle = fill
-          ctx.fillRect(x * scale, y * scale, scale, scale)
+          ctx.fillRect(x * pixelScale, y * pixelScale, pixelScale, pixelScale)
         }
       }
     }
 
     const gridStep = VIEW_SIZE / gridSize
     ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
-    ctx.lineWidth = 1
+    ctx.lineWidth = 1 / viewport.zoom
 
     for (let line = 0; line <= gridSize; line += 1) {
-      const pos = Math.round(line * gridStep) + 0.5
+      const pos = line * gridStep
       ctx.beginPath()
       ctx.moveTo(pos, 0)
       ctx.lineTo(pos, VIEW_SIZE)
@@ -220,27 +266,44 @@ function App() {
       ctx.lineTo(VIEW_SIZE, pos)
       ctx.stroke()
     }
-  }, [gridSize, pixels])
+
+    ctx.restore()
+  }, [gridSize, pixels, viewport])
 
   const pushHistory = useCallback(() => {
     setHistory((items) => [...items.slice(-39), clonePixels(pixels)])
     setFuture([])
   }, [pixels])
 
-  const pointToCell = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+  const pointerToCanvasPoint = useCallback((event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current
     if (!canvas) return null
 
     const rect = canvas.getBoundingClientRect()
-    const rawX = Math.floor(((event.clientX - rect.left) / rect.width) * CANVAS_SIZE)
-    const rawY = Math.floor(((event.clientY - rect.top) / rect.height) * CANVAS_SIZE)
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * VIEW_SIZE,
+      y: ((event.clientY - rect.top) / rect.height) * VIEW_SIZE,
+    }
+  }, [])
+
+  const pointToCell = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointerToCanvasPoint(event)
+    if (!point) return null
+
+    const worldX = (point.x - viewport.panX) / viewport.zoom
+    const worldY = (point.y - viewport.panY) / viewport.zoom
+
+    if (worldX < 0 || worldY < 0 || worldX >= VIEW_SIZE || worldY >= VIEW_SIZE) return null
+
+    const rawX = Math.floor((worldX / VIEW_SIZE) * CANVAS_SIZE)
+    const rawY = Math.floor((worldY / VIEW_SIZE) * CANVAS_SIZE)
     const x = Math.min(CANVAS_SIZE - 1, Math.max(0, rawX))
     const y = Math.min(CANVAS_SIZE - 1, Math.max(0, rawY))
     const cellX = Math.floor(x / blockSize)
     const cellY = Math.floor(y / blockSize)
 
     return { cellX, cellY, x: cellX * blockSize, y: cellY * blockSize }
-  }, [blockSize])
+  }, [blockSize, pointerToCanvasPoint, viewport])
 
   const paintBlock = useCallback(
     (nextPixels: Pixel[], cellX: number, cellY: number, nextColor: Pixel) => {
@@ -326,10 +389,78 @@ function App() {
     [brushSize, color, floodFill, gridSize, paintBlock, pointToCell, tool],
   )
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (tool === 'view') return
+  const resetGesture = () => {
+    gestureRef.current = { lastCenter: null, lastDistance: null }
+  }
 
+  const updateViewGesture = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointerToCanvasPoint(event)
+    if (!point) return
+
+    activePointersRef.current.set(event.pointerId, point)
+    const pointers = Array.from(activePointersRef.current.values())
+
+    if (pointers.length === 1) {
+      const lastCenter = gestureRef.current.lastCenter
+      if (lastCenter) {
+        const deltaX = point.x - lastCenter.x
+        const deltaY = point.y - lastCenter.y
+
+        setViewport((current) =>
+          clampViewport({
+            ...current,
+            panX: current.panX + deltaX,
+            panY: current.panY + deltaY,
+          }),
+        )
+      }
+
+      gestureRef.current = { lastCenter: point, lastDistance: null }
+      return
+    }
+
+    if (pointers.length >= 2) {
+      const first = pointers[0]
+      const second = pointers[1]
+      const center = getCenter(first, second)
+      const distance = getDistance(first, second)
+      const lastCenter = gestureRef.current.lastCenter
+      const lastDistance = gestureRef.current.lastDistance
+
+      setViewport((current) => {
+        const distanceScale = lastDistance ? distance / lastDistance : 1
+        const nextZoom = clamp(current.zoom * distanceScale, MIN_ZOOM, MAX_ZOOM)
+        const zoomRatio = nextZoom / current.zoom
+        const panDeltaX = lastCenter ? center.x - lastCenter.x : 0
+        const panDeltaY = lastCenter ? center.y - lastCenter.y : 0
+
+        return clampViewport({
+          zoom: nextZoom,
+          panX: center.x - (center.x - current.panX) * zoomRatio + panDeltaX,
+          panY: center.y - (center.y - current.panY) * zoomRatio + panDeltaY,
+        })
+      })
+
+      gestureRef.current = { lastCenter: center, lastDistance: distance }
+    }
+  }
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
+
+    if (tool === 'view') {
+      const point = pointerToCanvasPoint(event)
+      if (!point) return
+
+      activePointersRef.current.set(event.pointerId, point)
+      const pointers = Array.from(activePointersRef.current.values())
+      gestureRef.current =
+        pointers.length >= 2
+          ? { lastCenter: getCenter(pointers[0], pointers[1]), lastDistance: getDistance(pointers[0], pointers[1]) }
+          : { lastCenter: point, lastDistance: null }
+      return
+    }
+
     isDrawingRef.current = true
     lastPaintedRef.current = null
 
@@ -338,13 +469,50 @@ function App() {
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current || tool === 'fill' || tool === 'view') return
+    if (tool === 'view') {
+      updateViewGesture(event)
+      return
+    }
+
+    if (!isDrawingRef.current || tool === 'fill') return
     applyTool(event)
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = (event?: React.PointerEvent<HTMLCanvasElement>) => {
+    if (event) {
+      activePointersRef.current.delete(event.pointerId)
+      if (activePointersRef.current.size === 0) {
+        resetGesture()
+      } else {
+        const pointers = Array.from(activePointersRef.current.values())
+        gestureRef.current =
+          pointers.length >= 2
+            ? { lastCenter: getCenter(pointers[0], pointers[1]), lastDistance: getDistance(pointers[0], pointers[1]) }
+            : { lastCenter: pointers[0], lastDistance: null }
+      }
+    }
+
     isDrawingRef.current = false
     lastPaintedRef.current = null
+  }
+
+  const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+    if (tool !== 'view') return
+
+    event.preventDefault()
+    const point = pointerToCanvasPoint(event)
+    if (!point) return
+
+    setViewport((current) => {
+      const nextZoom = clamp(current.zoom * (event.deltaY > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM)
+      const zoomRatio = nextZoom / current.zoom
+
+      return clampViewport({
+        zoom: nextZoom,
+        panX: point.x - (point.x - current.panX) * zoomRatio,
+        panY: point.y - (point.y - current.panY) * zoomRatio,
+      })
+    })
   }
 
   const undo = () => {
@@ -498,7 +666,15 @@ function App() {
   }
 
   const toggleMenu = (menuId: MenuId) => {
-    setActiveMenu((current) => (current === menuId ? current : menuId))
+    setActiveMenu((current) => {
+      if (current === menuId) {
+        setIsMenuOpen((open) => !open)
+        return current
+      }
+
+      setIsMenuOpen(true)
+      return menuId
+    })
   }
 
   const renderActiveMenu = () => {
@@ -538,6 +714,19 @@ function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="control-group">
+            <span className="label">View</span>
+            <button
+              onClick={() => {
+                setViewport({ zoom: 1, panX: 0, panY: 0 })
+                setStatus('View reset')
+              }}
+              type="button"
+            >
+              Reset view
+            </button>
           </div>
         </>
       )
@@ -682,17 +871,33 @@ function App() {
             onPointerLeave={stopDrawing}
             onPointerMove={handlePointerMove}
             onPointerUp={stopDrawing}
+            onWheel={handleWheel}
             ref={canvasRef}
             width={VIEW_SIZE}
           />
         </section>
       </section>
 
-      <nav className="floating-rail" aria-label="Editor menus">
+      <section
+        className={isMenuOpen ? 'bottom-drawer open' : 'bottom-drawer'}
+        aria-hidden={!isMenuOpen}
+        aria-label={`${activeMenu} menu`}
+      >
+        <div className="drawer-handle"></div>
+        <div className="floating-panel-header">
+          <span className="label">{MENUS.find((item) => item.id === activeMenu)?.label}</span>
+          <button className="drawer-close" onClick={() => setIsMenuOpen(false)} type="button">
+            Hide
+          </button>
+        </div>
+        <div className="drawer-content">{renderActiveMenu()}</div>
+      </section>
+
+      <nav className="bottom-toolbar" aria-label="Editor menus">
         {MENUS.map((item) => (
           <button
             aria-label={item.label}
-            className={activeMenu === item.id ? 'rail-button active' : 'rail-button'}
+            className={activeMenu === item.id && isMenuOpen ? 'rail-button active' : 'rail-button'}
             key={item.id}
             onClick={() => toggleMenu(item.id)}
             title={item.label}
@@ -701,23 +906,13 @@ function App() {
             {item.icon}
           </button>
         ))}
-      </nav>
-
-      <section className="floating-panel" aria-label={`${activeMenu} menu`}>
-        <div className="floating-panel-header">
-          <span className="label">{MENUS.find((item) => item.id === activeMenu)?.label}</span>
-        </div>
-        {renderActiveMenu()}
-      </section>
-
-      <div className="history-float" aria-label="History controls">
         <button disabled={!history.length} onClick={undo} title="Undo" type="button">
           Undo
         </button>
         <button disabled={!future.length} onClick={redo} title="Redo" type="button">
           Redo
         </button>
-      </div>
+      </nav>
     </main>
   )
 }
