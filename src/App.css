@@ -119,8 +119,8 @@ button:disabled {
   display: grid;
   place-items: center;
   gap: 4px;
-  min-height: 70px;
-  padding: 8px;
+  min-height: 7px;
+  padding: 1px;
   text-transform: capitalize;
 }
 
