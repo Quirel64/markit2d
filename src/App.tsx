@@ -226,7 +226,7 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
-  const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
+  const [viewport, setViewport] = useState<port>({ zoom: 1, panX: 0, panY: 0 })
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -939,7 +939,7 @@ function App() {
               title={item.label}
               type="button"
             >
-              <span aria-hidden="true">{item.icon}</span>
+              
               <span>{item.label}</span>
             </button>
           ))}

@@ -331,10 +331,10 @@ button:disabled {
 
 .menu-tab {
   display: grid;
-  min-height: 50px;
+  min-height: 20px;
   place-items: center;
   gap: 2px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .menu-tab.active {
