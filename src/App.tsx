@@ -20,6 +20,12 @@ type GestureState = {
   lastDistance: number | null
 }
 
+type HslColor = {
+  hue: number
+  saturation: number
+  lightness: number
+}
+
 type ProjectPayloadV1 = {
   version: 1
   width: number
@@ -55,6 +61,7 @@ const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
   { id: 'project', icon: 'P', label: 'Project' },
 ]
 const STORAGE_KEY = 'pixel-grid-studio-draft'
+const PINNED_COLORS_KEY = 'pixel-grid-studio-pinned-colors'
 const PALETTE = [
   '#111827',
   '#ffffff',
@@ -104,6 +111,79 @@ const hexToRgb = (hex: string) => {
     green: (value >> 8) & 255,
     blue: value & 255,
   }
+}
+
+const rgbToHex = (red: number, green: number, blue: number) =>
+  `#${[red, green, blue].map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')}`
+
+const hexToHsl = (hex: string): HslColor => {
+  const { red, green, blue } = hexToRgb(hex)
+  const r = red / 255
+  const g = green / 255
+  const b = blue / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const lightness = (max + min) / 2
+  const delta = max - min
+
+  if (delta === 0) {
+    return { hue: 0, saturation: 0, lightness }
+  }
+
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1))
+  const hue =
+    max === r
+      ? ((g - b) / delta) % 6
+      : max === g
+        ? (b - r) / delta + 2
+        : (r - g) / delta + 4
+
+  return {
+    hue: (hue * 60 + 360) % 360,
+    saturation,
+    lightness,
+  }
+}
+
+const hslToHex = ({ hue, saturation, lightness }: HslColor) => {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const match = lightness - chroma / 2
+  let r = 0
+  let g = 0
+  let b = 0
+
+  if (hue < 60) {
+    r = chroma
+    g = x
+  } else if (hue < 120) {
+    r = x
+    g = chroma
+  } else if (hue < 180) {
+    g = chroma
+    b = x
+  } else if (hue < 240) {
+    g = x
+    b = chroma
+  } else if (hue < 300) {
+    r = x
+    b = chroma
+  } else {
+    r = chroma
+    b = x
+  }
+
+  return rgbToHex((r + match) * 255, (g + match) * 255, (b + match) * 255)
+}
+
+const shiftColor = (hex: string, shift: Partial<HslColor>) => {
+  const hsl = hexToHsl(hex)
+
+  return hslToHex({
+    hue: (hsl.hue + (shift.hue ?? 0) + 360) % 360,
+    saturation: clamp(hsl.saturation + (shift.saturation ?? 0), 0, 1),
+    lightness: clamp(hsl.lightness + (shift.lightness ?? 0), 0.04, 0.96),
+  })
 }
 
 const toBase64Url = (value: string) =>
@@ -216,6 +296,19 @@ function App() {
   const [tool, setTool] = useState<Tool>('pencil')
   const [color, setColor] = useState(PALETTE[0])
   const [customColor, setCustomColor] = useState(PALETTE[0])
+  const [pinnedColors, setPinnedColors] = useState<string[]>(() => {
+    const saved = window.localStorage.getItem(PINNED_COLORS_KEY)
+    if (!saved) return PALETTE.slice(0, 5)
+
+    try {
+      const parsed = JSON.parse(saved) as unknown
+      if (!Array.isArray(parsed)) return PALETTE.slice(0, 5)
+
+      return parsed.filter((item): item is string => typeof item === 'string' && /^#[0-9a-f]{6}$/i.test(item))
+    } catch {
+      return PALETTE.slice(0, 5)
+    }
+  })
   const [gridSize, setGridSize] = useState(32)
   const [brushSize, setBrushSize] = useState(1)
   const [exportScale, setExportScale] = useState(8)
@@ -226,13 +319,17 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
-  const [viewport, setViewport] = useState<port>({ zoom: 1, panX: 0, panY: 0 })
+  const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, encodeProject(pixels))
   }, [pixels])
+
+  useEffect(() => {
+    window.localStorage.setItem(PINNED_COLORS_KEY, JSON.stringify(pinnedColors))
+  }, [pinnedColors])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -700,6 +797,40 @@ function App() {
     setColor(nextColor)
   }
 
+  const selectColor = (nextColor: string) => {
+    setColor(nextColor)
+    setCustomColor(nextColor)
+  }
+
+  const pinCurrentColor = () => {
+    setPinnedColors((items) => {
+      const normalized = color.toLowerCase()
+      const nextItems = [normalized, ...items.filter((item) => item.toLowerCase() !== normalized)]
+
+      return nextItems.slice(0, 18)
+    })
+    setStatus('Color pinned')
+  }
+
+  const unpinColor = (targetColor: string) => {
+    setPinnedColors((items) => items.filter((item) => item.toLowerCase() !== targetColor.toLowerCase()))
+    setStatus('Color unpinned')
+  }
+
+  const shadeRing = useMemo(
+    () => [
+      { label: 'Lighter', color: shiftColor(color, { lightness: 0.16 }) },
+      { label: 'Warmer', color: shiftColor(color, { hue: -18, saturation: 0.04 }) },
+      { label: 'Darker', color: shiftColor(color, { lightness: -0.16 }) },
+      { label: 'Cooler', color: shiftColor(color, { hue: 18, saturation: 0.04 }) },
+      { label: 'Bright', color: shiftColor(color, { saturation: 0.16, lightness: 0.06 }) },
+      { label: 'Muted', color: shiftColor(color, { saturation: -0.18, lightness: -0.02 }) },
+      { label: 'Deep', color: shiftColor(color, { saturation: 0.08, lightness: -0.26 }) },
+      { label: 'Soft', color: shiftColor(color, { saturation: -0.1, lightness: 0.24 }) },
+    ],
+    [color],
+  )
+
   const toggleMenu = (menuId: MenuId) => {
     setActiveMenu(menuId)
   }
@@ -781,20 +912,86 @@ function App() {
 
     if (activeMenu === 'color') {
       return (
-        <div className="control-group">
-          <span className="label">Colors</span>
-          <div className="palette">
-            {PALETTE.map((swatch) => (
+        <>
+          <div className="control-group">
+            <span className="label">Current</span>
+            <div className="current-color-card">
               <button
-                aria-label={`Use ${swatch}`}
-                className={color === swatch ? 'swatch active' : 'swatch'}
-                key={swatch}
-                onClick={() => setColor(swatch)}
-                style={{ backgroundColor: swatch }}
+                aria-label={`Use current color ${color}`}
+                className="current-swatch"
+                style={{ backgroundColor: color }}
                 type="button"
               />
-            ))}
+              <div>
+                <strong>{color.toUpperCase()}</strong>
+                <button onClick={pinCurrentColor} type="button">
+                  Pin color
+                </button>
+              </div>
+            </div>
           </div>
+
+          <div className="control-group">
+            <span className="label">Pinned</span>
+            <div className="palette">
+              {pinnedColors.map((swatch) => (
+                <button
+                  aria-label={`Use pinned ${swatch}`}
+                  className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
+                  key={swatch}
+                  onClick={() => selectColor(swatch)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    unpinColor(swatch)
+                  }}
+                  style={{ backgroundColor: swatch }}
+                  title="Tap to use, right-click to unpin"
+                  type="button"
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="control-group">
+            <span className="label">Shade ring</span>
+            <div className="shade-ring">
+              {shadeRing.map((shade, index) => (
+                <button
+                  aria-label={`Use ${shade.label} ${shade.color}`}
+                  className={`shade-swatch shade-${index}`}
+                  key={`${shade.label}-${shade.color}`}
+                  onClick={() => selectColor(shade.color)}
+                  style={{ backgroundColor: shade.color }}
+                  title={shade.label}
+                  type="button"
+                />
+              ))}
+              <button
+                aria-label={`Use base ${color}`}
+                className="shade-center"
+                onClick={() => selectColor(color)}
+                style={{ backgroundColor: color }}
+                type="button"
+              />
+            </div>
+          </div>
+
+          <div className="control-group">
+            <span className="label">Preset palette</span>
+            <div className="palette">
+              {PALETTE.map((swatch) => (
+                <button
+                  aria-label={`Use ${swatch}`}
+                  className={color === swatch ? 'swatch active' : 'swatch'}
+                  key={swatch}
+                  onClick={() => selectColor(swatch)}
+                  style={{ backgroundColor: swatch }}
+                  type="button"
+                />
+              ))}
+            </div>
+          </div>
+
           <label className="color-field">
             <span>Custom</span>
             <input
@@ -803,7 +1000,7 @@ function App() {
               value={customColor}
             />
           </label>
-        </div>
+        </>
       )
     }
 
