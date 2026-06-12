@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-// nav to folder and in command prompt use npm run dev to start server for quick tests.
+// nav to folder and in command prommpt use npm run dev to start server for quick tests.
 
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
