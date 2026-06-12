@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
+// nav to folder and in command prompt use npm run dev to start server for quick tests.
+
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
 type MenuId = 'tools' | 'grid' | 'color' | 'project'
@@ -913,43 +915,62 @@ function App() {
     if (activeMenu === 'color') {
       return (
         <>
-          <div className="control-group">
-            <span className="label">Current</span>
-            <div className="current-color-card">
-              <button
-                aria-label={`Use current color ${color}`}
-                className="current-swatch"
-                style={{ backgroundColor: color }}
-                type="button"
-              />
-              <div>
-                <strong>{color.toUpperCase()}</strong>
-                <button onClick={pinCurrentColor} type="button">
-                  Pin color
-                </button>
-              </div>
-            </div>
-          </div>
+         <div className="current-color-card">
+  <button
+    aria-label={`Use current color ${color}`}
+    className="current-swatch"
+    style={{ backgroundColor: color }}
+    type="button"
+  />
+
+  <div>
+    <strong>{color.toUpperCase()}</strong>
+
+    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+      <button onClick={pinCurrentColor} type="button">
+        Pin color
+      </button>
+
+      <button
+        onClick={() => unpinColor(color)}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          unpinColor(color)
+        }}
+        type="button"
+      >
+        Unpin color
+      </button>
+    </div>
+  </div>
+</div>
+
 
           <div className="control-group">
             <span className="label">Pinned</span>
             <div className="palette">
-              {pinnedColors.map((swatch) => (
-                <button
-                  aria-label={`Use pinned ${swatch}`}
-                  className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
-                  key={swatch}
-                  onClick={() => selectColor(swatch)}
-                  onContextMenu={(event) => {
+             {pinnedColors.map((swatch) => (
+  <div key={swatch} className="swatch-row">
+    <button
+      aria-label={`Use pinned ${swatch}`}
+      className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
+      onClick={() => selectColor(swatch)}
+       onContextMenu={(event) => {
                     event.preventDefault()
+                    selectColor(swatch)
                     unpinColor(swatch)
                   }}
-                  style={{ backgroundColor: swatch }}
-                  title="Tap to use, right-click to unpin"
-                  type="button"
-                />
-              ))}
+      style={{ backgroundColor: swatch }}
+      title="Tap to use, right-click to unpin"
+      type="button"
+    />
+
+  
+  </div>
+))}
+
             </div>
+            
           </div>
 
           <div className="control-group">
