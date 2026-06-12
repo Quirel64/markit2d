@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 // nav to folder and in command prommpt use npm run dev to start server for quick tests.
+// to update the folder do npm install then npm run build then delete what is inside the docs folder and 
+// replace it with whats inside the dist folder and save and
+//  then do github commit which can be done via vscode
+
 
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill'
 type Pixel = string | null
