@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
+
 // nav to this folder and in command prommpt use npm run dev to start server for quick tests.
 
 type Tool = 'view' | 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'select'
+
+// nav to folder and in command prommpt use npm run dev to start server for quick tests.
+// to update the folder do npm install then npm run build then delete what is inside the docs folder and 
+// replace it with whats inside the dist folder and save and
+//  then do github commit which can be done via vscode
+
+
+
+
 type Pixel = string | null
 type MenuId = 'tools' | 'grid' | 'color' | 'project'
 type Viewport = {
@@ -1285,7 +1295,8 @@ function App() {
 
   <div>
     <strong>{color.toUpperCase()}</strong>
-    
+
+
     <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
       <button onClick={pinCurrentColor} type="button">
         Pin color
@@ -1299,7 +1310,11 @@ function App() {
         }}
         type="button"
       >
+
         Unpin color 
+
+        Unpin color
+
       </button>
     </div>
   </div>
