@@ -110,18 +110,21 @@ button:disabled {
 }
 
 .button-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
 }
 
 .tool-button {
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  min-height: 7px;
-  padding: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
   text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tool-button.active,
@@ -333,6 +336,10 @@ button:disabled {
   touch-action: none;
 }
 
+.pixel-canvas.eyedropper-mode {
+  cursor: crosshair;
+}
+
 .action-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -369,6 +376,69 @@ button:disabled {
   border-color: #0f766e;
   background: #ccfbf1;
   color: #134e4a;
+}
+
+.quick-pins {
+  position: fixed;
+  z-index: 30;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #d6dce7;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.quick-pin {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.quick-pin:hover:not(:disabled) {
+  border-color: #475569;
+  background: #f8fafc;
+}
+
+.quick-pin:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.quick-pin:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.3);
+  outline-offset: 2px;
+}
+
+.quick-pin.active {
+  border-color: #0f766e;
+  background: #ccfbf1;
+  color: #134e4a;
+}
+
+.quick-pin .tool-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+}
+
+.color-pin .tool-icon {
+  border-radius: 6px;
+  color: #ffffff;
+  font-weight: 800;
 }
 
 .side-menu {
@@ -445,6 +515,23 @@ button:disabled {
 
 .hidden-input {
   display: none;
+}
+
+.pin-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.pin-btn.active {
+  border-color: #facc15;
+  background: #fef9c3;
+  color: #854d0e;
 }
 
 .project-code textarea {
