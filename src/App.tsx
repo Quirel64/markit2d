@@ -1,294 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-
-// nav to this folder and in command prommpt use npm run dev to start server for quick tests.
-
-type Tool = 'view' | 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'select'
-
-// nav to folder and in command prommpt use npm run dev to start server for quick tests.
-// to update the folder do npm install then npm run build then delete what is inside the docs folder and 
-// replace it with whats inside the dist folder and save and
-//  then do github commit which can be done via vscode
-
-
-
-
-type Pixel = string | null
-type MenuId = 'tools' | 'grid' | 'color' | 'project'
-type Viewport = {
-  zoom: number
-  panX: number
-  panY: number
-}
-
-type PointerPoint = {
-  x: number
-  y: number
-}
-
-type GestureState = {
-  lastCenter: PointerPoint | null
-  lastDistance: number | null
-}
-
-type HslColor = {
-  hue: number
-  saturation: number
-  lightness: number
-}
-
-type ProjectPayloadV1 = {
-  version: 1
-  width: number
-  height: number
-  pixels: Pixel[]
-}
-
-type ProjectPayloadV2 = {
-  version: 2
-  width: number
-  height: number
-  palette: string[]
-  runs: Array<[number, number]>
-}
-
-const CANVAS_SIZE = 64
-const VIEW_SIZE = 768
-const MIN_ZOOM = 1
-const MAX_ZOOM = 16
-const GRID_PRESETS = [8, 16, 32, 64]
-const BRUSH_PRESETS = [1, 3, 5]
-const EXPORT_SCALES = [1, 4, 8, 16]
-const TOOLS: Array<{ id: Tool; icon: string; label: string }> = [
-  { id: 'view', icon: '🔍', label: 'view' },
-  { id: 'pencil', icon: '✏️', label: 'pencil' },
-  { id: 'eraser', icon: '🧽', label: 'eraser' },
-  { id: 'fill', icon: '🪣', label: 'fill' },
-  { id: 'eyedropper', icon: '💧', label: 'eyedropper' },
-  { id: 'select', icon: '⛶', label: 'select' },
-]
-const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
-  { id: 'tools', icon: 'T', label: 'Tools' },
-  { id: 'grid', icon: 'G', label: 'Grid' },
-  { id: 'color', icon: 'C', label: 'Color' },
-  { id: 'project', icon: 'P', label: 'Project' },
-]
-const STORAGE_KEY = 'pixel-grid-studio-draft'
-const PINNED_COLORS_KEY = 'pixel-grid-studio-pinned-colors'
-const PINNED_TOOLS_KEY = 'pixel-grid-studio-pinned-tools'
-const PALETTE = [
-  '#111827',
-  '#ffffff',
-  '#ef4444',
-  '#f97316',
-  '#facc15',
-  '#22c55e',
-  '#14b8a6',
-  '#38bdf8',
-  '#6366f1',
-  '#ec4899',
-]
-
-const makeBlankPixels = () => Array<Pixel>(CANVAS_SIZE * CANVAS_SIZE).fill(null)
-
-const clonePixels = (pixels: Pixel[]) => [...pixels]
-
-const indexOf = (x: number, y: number) => y * CANVAS_SIZE + x
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-
-const clampViewport = ({ zoom, panX, panY }: Viewport): Viewport => {
-  const nextZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM)
-  const minPan = VIEW_SIZE - VIEW_SIZE * nextZoom
-
-  return {
-    zoom: nextZoom,
-    panX: nextZoom === MIN_ZOOM ? 0 : clamp(panX, minPan, 0),
-    panY: nextZoom === MIN_ZOOM ? 0 : clamp(panY, minPan, 0),
-  }
-}
-
-const getDistance = (first: PointerPoint, second: PointerPoint) =>
-  Math.hypot(second.x - first.x, second.y - first.y)
-
-const getCenter = (first: PointerPoint, second: PointerPoint) => ({
-  x: (first.x + second.x) / 2,
-  y: (first.y + second.y) / 2,
-})
-
-const hexToRgb = (hex: string) => {
-  const clean = hex.replace('#', '')
-  const value = Number.parseInt(clean, 16)
-
-  return {
-    red: (value >> 16) & 255,
-    green: (value >> 8) & 255,
-    blue: value & 255,
-  }
-}
-
-const rgbToHex = (red: number, green: number, blue: number) =>
-  `#${[red, green, blue].map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')}`
-
-const hexToHsl = (hex: string): HslColor => {
-  const { red, green, blue } = hexToRgb(hex)
-  const r = red / 255
-  const g = green / 255
-  const b = blue / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const lightness = (max + min) / 2
-  const delta = max - min
-
-  if (delta === 0) {
-    return { hue: 0, saturation: 0, lightness }
-  }
-
-  const saturation = delta / (1 - Math.abs(2 * lightness - 1))
-  const hue =
-    max === r
-      ? ((g - b) / delta) % 6
-      : max === g
-        ? (b - r) / delta + 2
-        : (r - g) / delta + 4
-
-  return {
-    hue: (hue * 60 + 360) % 360,
-    saturation,
-    lightness,
-  }
-}
-
-const hslToHex = ({ hue, saturation, lightness }: HslColor) => {
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
-  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
-  const match = lightness - chroma / 2
-  let r = 0
-  let g = 0
-  let b = 0
-
-  if (hue < 60) {
-    r = chroma
-    g = x
-  } else if (hue < 120) {
-    r = x
-    g = chroma
-  } else if (hue < 180) {
-    g = chroma
-    b = x
-  } else if (hue < 240) {
-    g = x
-    b = chroma
-  } else if (hue < 300) {
-    r = x
-    b = chroma
-  } else {
-    r = chroma
-    b = x
-  }
-
-  return rgbToHex((r + match) * 255, (g + match) * 255, (b + match) * 255)
-}
-
-const shiftColor = (hex: string, shift: Partial<HslColor>) => {
-  const hsl = hexToHsl(hex)
-
-  return hslToHex({
-    hue: (hsl.hue + (shift.hue ?? 0) + 360) % 360,
-    saturation: clamp(hsl.saturation + (shift.saturation ?? 0), 0, 1),
-    lightness: clamp(hsl.lightness + (shift.lightness ?? 0), 0.04, 0.96),
-  })
-}
-
-const toBase64Url = (value: string) =>
-  btoa(value).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
-
-const fromBase64Url = (value: string) => {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
-
-  return atob(padded)
-}
-
-const encodeProject = (pixels: Pixel[]) => {
-  const palette = Array.from(new Set(pixels.filter((pixel): pixel is string => Boolean(pixel))))
-  const colorIndexes = new Map(palette.map((pixel, index) => [pixel, index + 1]))
-  const runs: Array<[number, number]> = []
-
-  for (const pixel of pixels) {
-    const value = pixel ? colorIndexes.get(pixel) ?? 0 : 0
-    const lastRun = runs.at(-1)
-
-    if (lastRun && lastRun[0] === value) {
-      lastRun[1] += 1
-    } else {
-      runs.push([value, 1])
-    }
-  }
-
-  const payload: ProjectPayloadV2 = {
-    version: 2,
-    width: CANVAS_SIZE,
-    height: CANVAS_SIZE,
-    palette,
-    runs,
-  }
-
-  return `PGS2:${toBase64Url(JSON.stringify(payload))}`
-}
-
-const decodeProjectV1 = (encoded: string) => {
-  const payload = JSON.parse(atob(encoded)) as ProjectPayloadV1
-
-  if (
-    payload.version !== 1 ||
-    payload.width !== CANVAS_SIZE ||
-    payload.height !== CANVAS_SIZE ||
-    !Array.isArray(payload.pixels) ||
-    payload.pixels.length !== CANVAS_SIZE * CANVAS_SIZE
-  ) {
-    throw new Error('Unsupported project code')
-  }
-
-  return payload.pixels.map((pixel) => (typeof pixel === 'string' ? pixel : null))
-}
-
-const decodeProjectV2 = (encoded: string) => {
-  const payload = JSON.parse(fromBase64Url(encoded)) as ProjectPayloadV2
-
-  if (
-    payload.version !== 2 ||
-    payload.width !== CANVAS_SIZE ||
-    payload.height !== CANVAS_SIZE ||
-    !Array.isArray(payload.palette) ||
-    !Array.isArray(payload.runs)
-  ) {
-    throw new Error('Unsupported project code')
-  }
-
-  const decoded = payload.runs.flatMap(([paletteIndex, count]) => {
-    const fill = paletteIndex === 0 ? null : payload.palette[paletteIndex - 1]
-    return Array<Pixel>(count).fill(typeof fill === 'string' ? fill : null)
-  })
-
-  if (decoded.length !== CANVAS_SIZE * CANVAS_SIZE) {
-    throw new Error('Unsupported project code')
-  }
-
-  return decoded
-}
-
-const decodeProject = (code: string) => {
-  const trimmed = code.trim()
-  const prefix = trimmed.slice(0, 5).toUpperCase()
-  const encoded = trimmed.slice(5)
-
-  if (prefix === 'PGS2:') return decodeProjectV2(encoded)
-  if (prefix === 'PGS1:') return decodeProjectV1(encoded)
-
-  return decodeProjectV1(trimmed)
-}
+import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection } from './types'
+import {
+  CANVAS_SIZE,
+  VIEW_SIZE,
+  GRID_PRESETS,
+  BRUSH_PRESETS,
+  EXPORT_SCALES,
+  TOOLS,
+  MENUS,
+  STORAGE_KEY,
+  PINNED_COLORS_KEY,
+  PINNED_TOOLS_KEY,
+  PALETTE,
+} from './constants'
+import { makeBlankPixels, clonePixels, indexOf, clamp } from './utils/canvas'
+import { clampViewport, getDistance, getCenter } from './utils/viewport'
+import { hexToRgb, shiftColor } from './utils/color'
+import { encodeProject, decodeProject } from './utils/project'
+import { findPixelPath } from './utils/pathfinding'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -325,7 +56,6 @@ function App() {
       return PALETTE.slice(0, 5)
     }
   })
-
   const [pinnedTools, setPinnedTools] = useState<Tool[]>(() => {
     const saved = window.localStorage.getItem(PINNED_TOOLS_KEY)
     if (!saved) return ['pencil', 'eraser', 'fill']
@@ -334,20 +64,21 @@ function App() {
       const parsed = JSON.parse(saved) as unknown
       if (!Array.isArray(parsed)) return ['pencil', 'eraser', 'fill']
 
-      return parsed.filter((item): item is Tool => ['view', 'pencil', 'eraser', 'fill', 'eyedropper'].includes(item))
+      return parsed.filter((item): item is Tool =>
+        ['view', 'pencil', 'eraser', 'fill', 'eyedropper', 'select', 'path'].includes(item),
+      )
     } catch {
       return ['pencil', 'eraser', 'fill']
     }
   })
-
   const [selection, setSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const [floatingSelection, setFloatingSelection] = useState<{
-    pixels: Array<{ x: number; y: number; color: Pixel; originalX: number; originalY: number }>
-    bounds: { x: number; y: number; width: number; height: number }
-    transform: { rotation: number; flipX: boolean; flipY: boolean; offsetX: number; offsetY: number }
-  } | null>(null)
+  const [floatingSelection, setFloatingSelection] = useState<FloatingSelection | null>(null)
+  const [clipboard, setClipboard] = useState<FloatingSelection | null>(null)
   const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null)
-
+  const [pathStart, setPathStart] = useState<PointerPoint | null>(null)
+  const [previewPath, setPreviewPath] = useState<PointerPoint[]>([])
+  const [pathAllowDiagonal, setPathAllowDiagonal] = useState(false)
+  const [pathCanCrossColors, setPathCanCrossColors] = useState(false)
   const [gridSize, setGridSize] = useState(32)
   const [brushSize, setBrushSize] = useState(1)
   const [exportScale, setExportScale] = useState(8)
@@ -363,6 +94,24 @@ function App() {
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
+  const isPathCellBlocked = useCallback(
+    (point: PointerPoint, sourcePixels: Pixel[] = pixels) => {
+      if (pathCanCrossColors) return false
+
+      const startX = point.x * blockSize
+      const startY = point.y * blockSize
+
+      for (let y = startY; y < startY + blockSize; y += 1) {
+        for (let x = startX; x < startX + blockSize; x += 1) {
+          if (sourcePixels[indexOf(x, y)] !== null) return true
+        }
+      }
+
+      return false
+    },
+    [blockSize, pathCanCrossColors, pixels],
+  )
+
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, encodeProject(pixels))
   }, [pixels])
@@ -374,6 +123,13 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(PINNED_TOOLS_KEY, JSON.stringify(pinnedTools))
   }, [pinnedTools])
+
+  useEffect(() => {
+    if (tool === 'path') return
+
+    //setPathStart(null)
+   // setPreviewPath([])
+  }, [tool])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -468,6 +224,26 @@ function App() {
       ctx.restore()
     }
 
+    if (tool === 'path' && (previewPath.length || pathStart)) {
+      const cellScale = VIEW_SIZE / gridSize
+      const previewColor = hexToRgb(color)
+
+      ctx.save()
+      ctx.fillStyle = `rgba(${previewColor.red}, ${previewColor.green}, ${previewColor.blue}, 0.58)`
+
+      for (const point of previewPath) {
+        ctx.fillRect(point.x * cellScale, point.y * cellScale, cellScale, cellScale)
+      }
+
+      if (pathStart) {
+        ctx.strokeStyle = '#0f766e'
+        ctx.lineWidth = 2 / viewport.zoom
+        ctx.strokeRect(pathStart.x * cellScale, pathStart.y * cellScale, cellScale, cellScale)
+      }
+
+      ctx.restore()
+    }
+
     const gridStep = VIEW_SIZE / gridSize
     ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
     ctx.lineWidth = 1 / viewport.zoom
@@ -485,7 +261,7 @@ function App() {
     }
 
     ctx.restore()
-  }, [gridSize, pixels, viewport, floatingSelection, selection])
+  }, [color, gridSize, pathStart, pixels, previewPath, tool, viewport, floatingSelection, selection])
 
   const pushHistory = useCallback(() => {
     setHistory((items) => [...items.slice(-39), clonePixels(pixels)])
@@ -551,7 +327,7 @@ function App() {
 
   const zoomAtPoint = useCallback((point: PointerPoint, zoomFactor: number) => {
     setViewport((current) => {
-      const nextZoom = clamp(current.zoom * zoomFactor, MIN_ZOOM, MAX_ZOOM)
+      const nextZoom = clamp(current.zoom * zoomFactor, 1, 16)
       const zoomRatio = nextZoom / current.zoom
 
       return clampViewport({
@@ -592,6 +368,20 @@ function App() {
       }
     },
     [blockSize, brushSize, gridSize],
+  )
+
+  const paintGridCell = useCallback(
+    (nextPixels: Pixel[], cellX: number, cellY: number, nextColor: Pixel) => {
+      const startX = cellX * blockSize
+      const startY = cellY * blockSize
+
+      for (let y = startY; y < startY + blockSize; y += 1) {
+        for (let x = startX; x < startX + blockSize; x += 1) {
+          nextPixels[indexOf(x, y)] = nextColor
+        }
+      }
+    },
+    [blockSize],
   )
 
   const floodFill = useCallback(
@@ -649,6 +439,10 @@ function App() {
         return
       }
 
+      if (tool === 'path') {
+        return
+      }
+
       const paintKey = `${point.cellX}:${point.cellY}:${tool}:${color}:${brushSize}:${gridSize}`
       if (lastPaintedRef.current === paintKey) return
       lastPaintedRef.current = paintKey
@@ -702,7 +496,7 @@ function App() {
 
       setViewport((current) => {
         const distanceScale = lastDistance ? distance / lastDistance : 1
-        const nextZoom = clamp(current.zoom * distanceScale, MIN_ZOOM, MAX_ZOOM)
+        const nextZoom = clamp(current.zoom * distanceScale, 1, 16)
         const zoomRatio = nextZoom / current.zoom
         const panDeltaX = lastCenter ? center.x - lastCenter.x : 0
         const panDeltaY = lastCenter ? center.y - lastCenter.y : 0
@@ -763,6 +557,18 @@ function App() {
       return
     }
 
+    if (tool === 'path') {
+      const point = pointToCell(event)
+      if (!point) return
+
+      isDrawingRef.current = true
+      const start = { x: point.cellX, y: point.cellY }
+      setPathStart(start)
+      setPreviewPath([start])
+      setStatus('Path start set')
+      return
+    }
+
     isDrawingRef.current = true
     lastPaintedRef.current = null
 
@@ -817,6 +623,26 @@ function App() {
       return
     }
 
+    if (tool === 'path') {
+      if (!isDrawingRef.current || !pathStart) return
+
+      const point = pointToCell(event)
+      if (!point) return
+
+      const end = { x: point.cellX, y: point.cellY }
+      const path = findPixelPath({
+        start: pathStart,
+        end,
+        width: gridSize,
+        height: gridSize,
+        allowDiagonal: pathAllowDiagonal,
+        isBlocked: (pathPoint) => isPathCellBlocked(pathPoint),
+      })
+      setPreviewPath(path)
+      if (!path.length) setStatus('No open path')
+      return
+    }
+
     if (!isDrawingRef.current || tool === 'fill') return
     applyTool(event)
   }
@@ -844,6 +670,28 @@ function App() {
         setSelection(null)
         setSelectStart(null)
       }
+      return
+    }
+
+    if (tool === 'path' && isDrawingRef.current) {
+      isDrawingRef.current = false
+
+      if (previewPath.length) {
+        pushHistory()
+        setPixels((current) => {
+          const nextPixels = clonePixels(current)
+          for (const point of previewPath) {
+            paintGridCell(nextPixels, point.x, point.y, color)
+          }
+          return nextPixels
+        })
+        setStatus(`Path drawn (${previewPath.length} cells)`)
+      } else {
+        setStatus('No open path')
+      }
+
+      setPathStart(null)
+      setPreviewPath([])
       return
     }
 
@@ -930,6 +778,29 @@ function App() {
     setStatus('Selection committed')
   }, [floatingSelection, pixels, pushHistory])
 
+  const copySelection = useCallback(() => {
+    if (!floatingSelection) return
+    setClipboard({ ...floatingSelection })
+    setStatus('Copied to clipboard')
+  }, [floatingSelection])
+
+  const cutSelection = useCallback(() => {
+    if (!floatingSelection) return
+    setClipboard({ ...floatingSelection })
+    setFloatingSelection(null)
+    setStatus('Cut to clipboard')
+  }, [floatingSelection])
+
+  const pasteClipboard = useCallback(() => {
+    if (!clipboard) return
+    setFloatingSelection({
+      ...clipboard,
+      transform: { rotation: 0, flipX: false, flipY: false, offsetX: 2, offsetY: 2 },
+    })
+    setTool('select')
+    setStatus('Pasted from clipboard')
+  }, [clipboard])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -956,6 +827,8 @@ function App() {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!floatingSelection) return
+
+      const isCtrl = event.ctrlKey || event.metaKey
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
@@ -984,12 +857,31 @@ function App() {
         event.preventDefault()
         setFloatingSelection(null)
         setStatus('Selection canceled')
+      } else if (isCtrl && event.key === 'c') {
+        event.preventDefault()
+        copySelection()
+      } else if (isCtrl && event.key === 'x') {
+        event.preventDefault()
+        cutSelection()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [floatingSelection, commitFloatingSelection])
+  }, [floatingSelection, commitFloatingSelection, copySelection, cutSelection])
+
+  useEffect(() => {
+    const handlePaste = (event: KeyboardEvent) => {
+      const isCtrl = event.ctrlKey || event.metaKey
+      if (isCtrl && event.key === 'v' && clipboard && !floatingSelection) {
+        event.preventDefault()
+        pasteClipboard()
+      }
+    }
+
+    window.addEventListener('keydown', handlePaste)
+    return () => window.removeEventListener('keydown', handlePaste)
+  }, [clipboard, floatingSelection, pasteClipboard])
 
   const undo = () => {
     setHistory((items) => {
@@ -1136,7 +1028,6 @@ function App() {
     }
   }
 
-
   const pinCurrentColor = () => {
     setPinnedColors((items) => {
       const normalized = color.toLowerCase()
@@ -1230,6 +1121,36 @@ function App() {
             </div>
           </div>
 
+          {tool === 'path' && (
+            <div className="control-group path-options">
+              <span className="label">Path</span>
+              <div className="segmented two-up">
+                <button
+                  className={!pathAllowDiagonal ? 'active' : ''}
+                  onClick={() => setPathAllowDiagonal(false)}
+                  type="button"
+                >
+                  Straight
+                </button>
+                <button
+                  className={pathAllowDiagonal ? 'active' : ''}
+                  onClick={() => setPathAllowDiagonal(true)}
+                  type="button"
+                >
+                  Diagonal
+                </button>
+              </div>
+              <label className="toggle-field">
+                <input
+                  checked={pathCanCrossColors}
+                  onChange={(event) => setPathCanCrossColors(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Cross colored cells</span>
+              </label>
+            </div>
+          )}
+
           <div className="control-group">
             <span className="label">Brush</span>
             <div className="segmented">
@@ -1285,67 +1206,57 @@ function App() {
     if (activeMenu === 'color') {
       return (
         <>
-         <div className="current-color-card">
-  <button
-    aria-label={`Use current color ${color}`}
-    className="current-swatch"
-    style={{ backgroundColor: color }}
-    type="button"
-  />
+          <div className="current-color-card">
+            <button
+              aria-label={`Use current color ${color}`}
+              className="current-swatch"
+              style={{ backgroundColor: color }}
+              type="button"
+            />
 
-  <div>
-    <strong>{color.toUpperCase()}</strong>
+            <div>
+              <strong>{color.toUpperCase()}</strong>
 
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button onClick={pinCurrentColor} type="button">
+                  Pin color
+                </button>
 
-    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-      <button onClick={pinCurrentColor} type="button">
-        Pin color
-      </button>
-
-      <button
-        onClick={() => unpinColor(color)}
-        onContextMenu={(event) => {
-          event.preventDefault()
-          unpinColor(color)
-        }}
-        type="button"
-      >
-
-        Unpin color 
-
-        Unpin color
-
-      </button>
-    </div>
-  </div>
-</div>
-
+                <button
+                  onClick={() => unpinColor(color)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    unpinColor(color)
+                  }}
+                  type="button"
+                >
+                  Unpin color
+                </button>
+              </div>
+            </div>
+          </div>
 
           <div className="control-group">
             <span className="label">Pinned</span>
             <div className="palette">
-             {pinnedColors.map((swatch) => (
-  <div key={swatch} className="swatch-row">
-    <button
-      aria-label={`Use pinned ${swatch}`}
-      className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
-      onClick={() => selectColor(swatch)}
-       onContextMenu={(event) => {
-                    event.preventDefault()
-                    selectColor(swatch)
-                    unpinColor(swatch)
-                  }}
-      style={{ backgroundColor: swatch }}
-      title="Tap to use, right-click to unpin"
-      type="button"
-    />
-
-  
-  </div>
-))}
-
+              {pinnedColors.map((swatch) => (
+                <div key={swatch} className="swatch-row">
+                  <button
+                    aria-label={`Use pinned ${swatch}`}
+                    className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
+                    onClick={() => selectColor(swatch)}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      selectColor(swatch)
+                      unpinColor(swatch)
+                    }}
+                    style={{ backgroundColor: swatch }}
+                    title="Tap to use, right-click to unpin"
+                    type="button"
+                  />
+                </div>
+              ))}
             </div>
-            
           </div>
 
           <div className="control-group">
@@ -1489,6 +1400,8 @@ function App() {
                 ? 'pixel-canvas view-mode'
                 : tool === 'eyedropper'
                 ? 'pixel-canvas eyedropper-mode'
+                : tool === 'path'
+                ? 'pixel-canvas path-mode'
                 : 'pixel-canvas'
             }
             height={VIEW_SIZE}
@@ -1547,41 +1460,53 @@ function App() {
         >
           <span className="tool-icon" aria-hidden="true" style={{ background: 'linear-gradient(135deg, #ef4444, #f97316, #facc15, #22c55e, #14b8a6, #38bdf8, #6366f1, #ec4899)' }}>C</span>
         </button>
-        {floatingSelection && (
-          <>
-            <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
-              <span className="tool-icon" aria-hidden="true">✓</span>
-            </button>
-            <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
-              <span className="tool-icon" aria-hidden="true">✕</span>
-            </button>
-            <button
-              className="quick-pin"
-              onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
-              title="Flip H"
-              type="button"
-            >
-              <span className="tool-icon" aria-hidden="true">⇔</span>
-            </button>
-            <button
-              className="quick-pin"
-              onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
-              title="Flip V"
-              type="button"
-            >
-              <span className="tool-icon" aria-hidden="true">⇕</span>
-            </button>
-            <button
-              className="quick-pin"
-              onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
-              title="Rotate 90°"
-              type="button"
-            >
-              <span className="tool-icon" aria-hidden="true">↻</span>
-            </button>
-          </>
+        {clipboard && (
+          <button className="quick-pin" onClick={pasteClipboard} title="Paste (Ctrl+V)" type="button">
+            <span className="tool-icon" aria-hidden="true">📋</span>
+          </button>
         )}
       </div>
+
+      {floatingSelection && (
+        <div className="selection-bar" aria-label="Selection controls">
+          <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
+            <span className="tool-icon" aria-hidden="true">✓</span>
+          </button>
+          <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
+            <span className="tool-icon" aria-hidden="true">✕</span>
+          </button>
+          <button className="quick-pin" onClick={copySelection} title="Copy (Ctrl+C)" type="button">
+            <span className="tool-icon" aria-hidden="true">📄</span>
+          </button>
+          <button className="quick-pin" onClick={cutSelection} title="Cut (Ctrl+X)" type="button">
+            <span className="tool-icon" aria-hidden="true">✂️</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
+            title="Flip H"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">⇔</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
+            title="Flip V"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">⇕</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
+            title="Rotate 90°"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">↻</span>
+          </button>
+        </div>
+      )}
 
       <aside className={isMenuOpen ? 'side-menu open' : 'side-menu'} aria-hidden={!isMenuOpen}>
         <div className="side-menu-header">
@@ -1600,7 +1525,6 @@ function App() {
               title={item.label}
               type="button"
             >
-              
               <span>{item.label}</span>
             </button>
           ))}

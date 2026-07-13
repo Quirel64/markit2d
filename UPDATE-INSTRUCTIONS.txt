@@ -1,0 +1,38 @@
+PIXEL GRID STUDIO - HOW TO UPDATE THE REPOSITORY
+=================================================
+
+PREVIEW LOCALLY
+---------------
+1. Open a terminal in this folder
+2. Run: npm run dev
+3. Open the URL it shows (usually http://localhost:5173)
+
+COMMIT AND PUSH CHANGES
+------------------------
+1. Open VSCode in this folder
+2. Make your changes to the code
+3. Open the Source Control panel (Ctrl+Shift+G)
+4. Click the "..." menu and choose "Commit"
+5. Click "Sync Changes" or "Push" to send to GitHub
+
+If you prefer the terminal:
+  git add -A
+  git commit -m "describe what you changed"
+  git push
+
+BUILD FOR DEPLOYMENT
+---------------------
+1. Run: npm install
+2. Run: npm run build
+3. Copy everything inside the "dist" folder into the "docs" folder
+4. Commit and push (the GitHub Actions workflow will deploy it)
+
+IF THE GITHUB ACTIONS BUILD FAILS
+----------------------------------
+1. Delete the "node_modules" folder
+2. Delete the "package-lock.json" file
+3. Run: npm install
+4. Run: npm run build (to verify it works)
+5. Commit and push the new package-lock.json
+
+NEVER commit the "node_modules" or "dist" folders - they are auto-generated.

@@ -152,6 +152,10 @@ button:disabled {
   gap: 6px;
 }
 
+.segmented.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .segmented button {
   min-height: 38px;
   font-size: 14px;
@@ -340,6 +344,10 @@ button:disabled {
   cursor: crosshair;
 }
 
+.pixel-canvas.path-mode {
+  cursor: cell;
+}
+
 .action-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -387,11 +395,24 @@ button:disabled {
   display: flex;
   gap: 6px;
   padding: 6px 10px;
+  max-width: 90vw;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid #d6dce7;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(10px);
+  scrollbar-width: thin;
+}
+
+.quick-pins::-webkit-scrollbar {
+  height: 4px;
+}
+
+.quick-pins::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .quick-pin {
@@ -439,6 +460,35 @@ button:disabled {
   border-radius: 6px;
   color: #ffffff;
   font-weight: 800;
+}
+
+.selection-bar {
+  position: fixed;
+  z-index: 31;
+  bottom: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  max-width: 90vw;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #d6dce7;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
+  scrollbar-width: thin;
+}
+
+.selection-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.selection-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .side-menu {
