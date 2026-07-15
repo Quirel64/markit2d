@@ -728,6 +728,19 @@ button:disabled {
     padding: 72px 10px 10px;
   }
 
+  .topbar {
+    padding-right: 56px;
+  }
+
+  .settings-btn {
+    position: fixed;
+    z-index: 40;
+    top: 14px;
+    right: 14px;
+    width: 44px;
+    height: 44px;
+  }
+
   .panel {
     padding: 12px;
   }
