@@ -1628,12 +1628,25 @@ function App() {
   return (
     <main className="app-shell">
       <section className="topbar">
-        <div>
-          <p className="eyebrow">Prototype</p>
-          <h1>Pixel Grid Studio</h1>
+        <div className="topbar-left">
+          <button
+            aria-expanded={isMenuOpen}
+            className="menu-toggle"
+            onClick={() => setIsMenuOpen((open) => !open)}
+            title="Menu"
+            type="button"
+          >
+            Menu
+          </button>
+          <button disabled={!history.length} onClick={undo} title="Undo" type="button">
+            Undo
+          </button>
+          <button disabled={!future.length} onClick={redo} title="Redo" type="button">
+            Redo
+          </button>
         </div>
         <div className="topbar-right">
-          <div className="status">{status}</div>
+          <span className="topbar-status">{status}</span>
           <button
             className={isSettingsOpen ? 'settings-btn active' : 'settings-btn'}
             onClick={() => setIsSettingsOpen((open) => !open)}
@@ -1671,24 +1684,6 @@ function App() {
           />
         </section>
       </section>
-
-      <div className="quick-controls" aria-label="Quick controls">
-        <button
-          aria-expanded={isMenuOpen}
-          className="menu-toggle"
-          onClick={() => setIsMenuOpen((open) => !open)}
-          title="Menu"
-          type="button"
-        >
-          Menu
-        </button>
-        <button disabled={!history.length} onClick={undo} title="Undo" type="button">
-          Undo
-        </button>
-        <button disabled={!future.length} onClick={redo} title="Redo" type="button">
-          Redo
-        </button>
-      </div>
 
       <div className={isQuickPinsOpen ? 'quick-pins' : 'quick-pins collapsed'}>
         <button

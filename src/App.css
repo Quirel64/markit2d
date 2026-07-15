@@ -1,69 +1,80 @@
 .app-shell {
   min-height: 100svh;
-  padding: 24px;
+  padding: 14px;
+  padding-top: 56px;
   box-sizing: border-box;
 }
 
 .topbar {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 1380px;
-  margin: 0 auto 18px;
-  padding-right: 56px;
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.topbar h1 {
-  margin: 0;
-  color: #172033;
-  font-size: clamp(28px, 5vw, 44px);
-  line-height: 1;
-}
-
-.status {
-  min-width: 164px;
-  padding: 10px 12px;
-  border: 1px solid #d6dce7;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
-  font-size: 14px;
-  text-align: center;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: end;
-  gap: 10px;
-}
-
-.settings-btn {
   position: fixed;
   z-index: 40;
   top: 14px;
+  left: 14px;
   right: 14px;
-  display: grid;
-  place-items: center;
-  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   height: 44px;
-  min-height: 44px;
-  padding: 0;
+  padding: 0 8px;
   border: 1px solid #d6dce7;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(10px);
-  font-size: 20px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-left button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-status {
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.menu-toggle {
+  border-color: #0f766e;
+  background: #ccfbf1;
+  color: #134e4a;
+}
+
+.eyebrow,
+.topbar h1,
+.status {
+  display: none;
+}
+
+.settings-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid #d6dce7;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 16px;
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
@@ -107,7 +118,6 @@
 .label {
   color: #475569;
   font-size: 13px;
-  
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -410,28 +420,6 @@ button:disabled {
   width: 100%;
 }
 
-.quick-controls {
-  position: fixed;
-  z-index: 40;
-  top: 14px;
-  left: 14px;
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #d6dce7;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(10px);
-}
-
-.quick-controls button {
-  min-height: 38px;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 800;
-}
-
 .menu-toggle {
   border-color: #0f766e;
   background: #ccfbf1;
@@ -571,11 +559,11 @@ button:disabled {
 .side-menu {
   position: fixed;
   z-index: 35;
-  top: 72px;
-  bottom: 14px;
+  top: 64px;
   left: 14px;
+  right: 14px;
   display: grid;
-  width: 280px;
+  max-height: calc(100svh - 82px);
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
@@ -585,28 +573,30 @@ button:disabled {
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(calc(-100% - 28px));
+  transform: translateY(calc(-100% - 28px));
   transition:
     opacity 160ms ease,
     transform 160ms ease;
   backdrop-filter: blur(10px);
+  overflow: hidden;
 }
 
 .side-menu.open {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+  transform: translateY(0);
+  overflow: hidden;
 }
 
 .settings-menu {
   position: fixed;
   z-index: 35;
-  top: 72px;
+  top: 64px;
   bottom: 14px;
   right: 14px;
   display: grid;
   width: 280px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
   border: 1px solid #d6dce7;
@@ -629,7 +619,23 @@ button:disabled {
 }
 
 .settings-tabs {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.settings-tabs .menu-tab {
+  min-height: 38px;
+  max-height: 38px;
+  padding: 0 4px;
+  font-size: 11px;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.settings-tabs .menu-tab-icon {
+  font-size: 13px;
 }
 
 .side-menu-header {
@@ -657,20 +663,14 @@ button:disabled {
   justify-content: center;
   gap: 4px;
   min-height: 38px;
-  max-height: 38px;
   padding: 0 6px;
   font-size: 12px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  width: 100%;
 }
 
 .menu-tab-icon {
   font-size: 14px;
   line-height: 1;
-  flex-shrink: 0;
 }
 
 .menu-tab.active {
@@ -856,21 +856,11 @@ button:disabled {
 
 @media (max-width: 1020px) {
   .app-shell {
-    padding: 72px 12px 14px;
+    padding: 56px 12px 14px;
   }
 
-  .topbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .status {
-    width: auto;
-    min-width: 0;
-  }
-
-  .topbar-right {
-    width: 100%;
+  .topbar-status {
+    max-width: 120px;
   }
 
   .workspace {
@@ -882,23 +872,44 @@ button:disabled {
   }
 
   .side-menu {
-    top: 72px;
-    bottom: 10px;
     left: 10px;
-    width: min(82vw, 300px);
+    right: 10px;
   }
 
   .settings-menu {
-    top: 32px;
-    bottom: 10px;
+    left: 10px;
     right: 10px;
-    width: min(82vw, 300px);
+    width: auto;
   }
 }
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 72px 10px 10px;
+    padding: 56px 10px 10px;
+  }
+
+  .topbar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .topbar-left button {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .topbar-status {
+    max-width: 80px;
+    font-size: 12px;
+  }
+
+  .settings-btn {
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    font-size: 14px;
   }
 
   .panel {
@@ -918,16 +929,13 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .quick-controls {
-    top: 10px;
+  .side-menu {
     left: 10px;
-    gap: 6px;
-    padding: 6px;
+    right: 10px;
   }
 
-  .quick-controls button {
-    min-height: 36px;
-    padding: 0 9px;
-    font-size: 13px;
+  .settings-menu {
+    left: 10px;
+    right: 10px;
   }
 }
