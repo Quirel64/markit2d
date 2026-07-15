@@ -1,5 +1,5 @@
-import type { Pixel, ProjectPayloadV1, ProjectPayloadV2 } from '../types'
-import { CANVAS_SIZE } from '../constants'
+import type { Pixel, ProjectPayloadV1, ProjectPayloadV2, ProjectMeta } from '../types'
+import { CANVAS_SIZE, PROJECTS_INDEX_KEY, PROJECT_PREFIX } from '../constants'
 
 const toBase64Url = (value: string): string =>
   btoa(value).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
@@ -89,3 +89,79 @@ export const decodeProject = (code: string): Pixel[] => {
 
   return decodeProjectV1(trimmed)
 }
+
+const hasPixels = (pixels: Pixel[]): boolean => pixels.some((p) => p !== null)
+
+const loadIndex = (): ProjectMeta[] => {
+  try {
+    const raw = window.localStorage.getItem(PROJECTS_INDEX_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is ProjectMeta =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as ProjectMeta).id === 'string' &&
+        typeof (item as ProjectMeta).name === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+const saveIndex = (index: ProjectMeta[]): void => {
+  window.localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify(index))
+}
+
+export const listProjects = (): ProjectMeta[] => loadIndex()
+
+export const loadProject = (id: string): Pixel[] | null => {
+  const raw = window.localStorage.getItem(PROJECT_PREFIX + id)
+  if (!raw) return null
+  try {
+    return decodeProject(raw)
+  } catch {
+    return null
+  }
+}
+
+export const saveProject = (id: string, pixels: Pixel[]): boolean => {
+  if (!hasPixels(pixels)) return false
+  const encoded = encodeProject(pixels)
+  window.localStorage.setItem(PROJECT_PREFIX + id, encoded)
+  return true
+}
+
+export const deleteProject = (id: string): void => {
+  window.localStorage.removeItem(PROJECT_PREFIX + id)
+  const index = loadIndex().filter((p) => p.id !== id)
+  saveIndex(index)
+}
+
+export const createProject = (name: string, pixels: Pixel[]): ProjectMeta | null => {
+  if (!hasPixels(pixels)) return null
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  const now = Date.now()
+  const meta: ProjectMeta = { id, name, createdAt: now, updatedAt: now }
+  saveProject(id, pixels)
+  const index = loadIndex()
+  index.unshift(meta)
+  saveIndex(index)
+  return meta
+}
+
+export const updateProject = (id: string, name: string, pixels: Pixel[]): boolean => {
+  const index = loadIndex()
+  const existing = index.find((p) => p.id === id)
+  if (!existing) return false
+  if (hasPixels(pixels)) {
+    saveProject(id, pixels)
+  }
+  existing.name = name
+  existing.updatedAt = Date.now()
+  saveIndex(index)
+  return true
+}
+
+export const isCanvasBlank = (pixels: Pixel[]): boolean => !hasPixels(pixels)

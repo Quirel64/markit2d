@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection } from './types'
+import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection, ShapeType, ProjectMeta } from './types'
 import {
   CANVAS_SIZE,
   VIEW_SIZE,
@@ -14,12 +14,63 @@ import {
   PINNED_COLORS_KEY,
   PINNED_TOOLS_KEY,
   PALETTE,
+  SHAPE_PRESETS,
+  PROJECT_PREFIX,
 } from './constants'
 import { makeBlankPixels, clonePixels, indexOf, clamp } from './utils/canvas'
 import { clampViewport, getDistance, getCenter } from './utils/viewport'
 import { hexToRgb, shiftColor } from './utils/color'
-import { encodeProject, decodeProject } from './utils/project'
+import { encodeProject, decodeProject, listProjects, loadProject, saveProject, deleteProject, createProject, updateProject, isCanvasBlank } from './utils/project'
 import { findPixelPath } from './utils/pathfinding'
+
+const PREVIEW_SIZE = 48
+
+function ProjectPreview({ projectId }: { projectId: string }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.imageSmoothingEnabled = false
+    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    ctx.fillStyle = '#f1f5f9'
+    ctx.fillRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+
+    const raw = window.localStorage.getItem(PROJECT_PREFIX + projectId)
+    if (!raw) return
+
+    try {
+      const pixels = decodeProject(raw)
+      const artCanvas = document.createElement('canvas')
+      artCanvas.width = CANVAS_SIZE
+      artCanvas.height = CANVAS_SIZE
+      const artCtx = artCanvas.getContext('2d')
+      if (!artCtx) return
+
+      const imageData = artCtx.createImageData(CANVAS_SIZE, CANVAS_SIZE)
+      pixels.forEach((pixel, index) => {
+        if (!pixel) return
+        const { red, green, blue } = hexToRgb(pixel)
+        const dataIndex = index * 4
+        imageData.data[dataIndex] = red
+        imageData.data[dataIndex + 1] = green
+        imageData.data[dataIndex + 2] = blue
+        imageData.data[dataIndex + 3] = 255
+      })
+      artCtx.putImageData(imageData, 0, 0)
+      ctx.drawImage(artCanvas, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    } catch {
+      ctx.fillStyle = '#e2e8f0'
+      ctx.fillRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    }
+  }, [projectId])
+
+  return <canvas ref={canvasRef} className="project-preview" height={PREVIEW_SIZE} width={PREVIEW_SIZE} />
+}
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -65,7 +116,7 @@ function App() {
       if (!Array.isArray(parsed)) return ['pencil', 'eraser', 'fill']
 
       return parsed.filter((item): item is Tool =>
-        ['view', 'pencil', 'eraser', 'fill', 'eyedropper', 'select', 'path'].includes(item),
+        ['view', 'pencil', 'eraser', 'fill', 'eyedropper', 'select', 'path', 'shape'].includes(item),
       )
     } catch {
       return ['pencil', 'eraser', 'fill']
@@ -79,6 +130,9 @@ function App() {
   const [previewPath, setPreviewPath] = useState<PointerPoint[]>([])
   const [pathAllowDiagonal, setPathAllowDiagonal] = useState(false)
   const [pathCanCrossColors, setPathCanCrossColors] = useState(false)
+  const [shapeType, setShapeType] = useState<ShapeType>('rectangle')
+  const [shapeStart, setShapeStart] = useState<PointerPoint | null>(null)
+  const [previewShape, setPreviewShape] = useState<PointerPoint[]>([])
   const [gridSize, setGridSize] = useState(32)
   const [brushSize, setBrushSize] = useState(1)
   const [exportScale, setExportScale] = useState(8)
@@ -90,9 +144,16 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'projects' | 'import-export'>('projects')
   const [isPinMode, setIsPinMode] = useState(false)
+  const [isQuickPinsOpen, setIsQuickPinsOpen] = useState(true)
   const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
   const [showGridLines, setShowGridLines] = useState(true)
+  const [projects, setProjects] = useState<ProjectMeta[]>(() => listProjects())
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -246,6 +307,26 @@ function App() {
       ctx.restore()
     }
 
+    if (tool === 'shape' && (previewShape.length || shapeStart)) {
+      const cellScale = VIEW_SIZE / gridSize
+      const previewColor = hexToRgb(color)
+
+      ctx.save()
+      ctx.fillStyle = `rgba(${previewColor.red}, ${previewColor.green}, ${previewColor.blue}, 0.58)`
+
+      for (const point of previewShape) {
+        ctx.fillRect(point.x * cellScale, point.y * cellScale, cellScale, cellScale)
+      }
+
+      if (shapeStart) {
+        ctx.strokeStyle = '#0f766e'
+        ctx.lineWidth = 2 / viewport.zoom
+        ctx.strokeRect(shapeStart.x * cellScale, shapeStart.y * cellScale, cellScale, cellScale)
+      }
+
+      ctx.restore()
+    }
+
     if (showGridLines) {
       const gridStep = VIEW_SIZE / gridSize
       ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
@@ -265,7 +346,7 @@ function App() {
     }
 
     ctx.restore()
-  }, [color, gridSize, pathStart, pixels, previewPath, showGridLines, tool, viewport, floatingSelection, selection])
+  }, [color, gridSize, pathStart, pixels, previewPath, previewShape, showGridLines, shapeStart, tool, viewport, floatingSelection, selection])
 
   const pushHistory = useCallback(() => {
     setHistory((items) => [...items.slice(-39), clonePixels(pixels)])
@@ -388,6 +469,82 @@ function App() {
     [blockSize],
   )
 
+  const getShapeCells = useCallback(
+    (start: PointerPoint, end: PointerPoint, type: ShapeType): PointerPoint[] => {
+      const minX = Math.min(start.x, end.x)
+      const maxX = Math.max(start.x, end.x)
+      const minY = Math.min(start.y, end.y)
+      const maxY = Math.max(start.y, end.y)
+
+      if (type === 'rectangle') {
+        const cells: PointerPoint[] = []
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const isEdge = x === minX || x === maxX || y === minY || y === maxY
+            if (isEdge) cells.push({ x, y })
+          }
+        }
+        return cells
+      }
+
+      if (type === 'circle') {
+        const centerX = (minX + maxX) / 2
+        const centerY = (minY + maxY) / 2
+        const radiusX = (maxX - minX) / 2
+        const radiusY = (maxY - minY) / 2
+        const radius = Math.max(radiusX, radiusY)
+        const cells: PointerPoint[] = []
+        const visited = new Set<string>()
+
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const dx = (x - centerX) / (radius || 1)
+            const dy = (y - centerY) / (radius || 1)
+            const dist = dx * dx + dy * dy
+            const isEdge = dist >= 0.64 && dist <= 1.44
+            if (isEdge) {
+              const key = `${x}:${y}`
+              if (!visited.has(key)) {
+                visited.add(key)
+                cells.push({ x, y })
+              }
+            }
+          }
+        }
+        return cells
+      }
+
+      if (type === 'line') {
+        const cells: PointerPoint[] = []
+        const dx = Math.abs(end.x - start.x)
+        const dy = Math.abs(end.y - start.y)
+        const sx = start.x < end.x ? 1 : -1
+        const sy = start.y < end.y ? 1 : -1
+        let err = dx - dy
+        let cx = start.x
+        let cy = start.y
+
+        while (true) {
+          cells.push({ x: cx, y: cy })
+          if (cx === end.x && cy === end.y) break
+          const e2 = 2 * err
+          if (e2 > -dy) {
+            err -= dy
+            cx += sx
+          }
+          if (e2 < dx) {
+            err += dx
+            cy += sy
+          }
+        }
+        return cells
+      }
+
+      return []
+    },
+    [],
+  )
+
   const floodFill = useCallback(
     (startX: number, startY: number, nextColor: Pixel) => {
       const targetColor = pixels[indexOf(startX, startY)]
@@ -444,6 +601,10 @@ function App() {
       }
 
       if (tool === 'path') {
+        return
+      }
+
+      if (tool === 'shape') {
         return
       }
 
@@ -573,6 +734,18 @@ function App() {
       return
     }
 
+    if (tool === 'shape') {
+      const point = pointToCell(event)
+      if (!point) return
+
+      isDrawingRef.current = true
+      const start = { x: point.cellX, y: point.cellY }
+      setShapeStart(start)
+      setPreviewShape([start])
+      setStatus('Shape start set')
+      return
+    }
+
     isDrawingRef.current = true
     lastPaintedRef.current = null
 
@@ -647,6 +820,19 @@ function App() {
       return
     }
 
+    if (tool === 'shape') {
+      if (!isDrawingRef.current || !shapeStart) return
+
+      const point = pointToCell(event)
+      if (!point) return
+
+      const end = { x: point.cellX, y: point.cellY }
+      const cells = getShapeCells(shapeStart, end, shapeType)
+      setPreviewShape(cells)
+      setStatus(`Shape: ${cells.length} cells`)
+      return
+    }
+
     if (!isDrawingRef.current || tool === 'fill') return
     applyTool(event)
   }
@@ -696,6 +882,28 @@ function App() {
 
       setPathStart(null)
       setPreviewPath([])
+      return
+    }
+
+    if (tool === 'shape' && isDrawingRef.current) {
+      isDrawingRef.current = false
+
+      if (previewShape.length) {
+        pushHistory()
+        setPixels((current) => {
+          const nextPixels = clonePixels(current)
+          for (const point of previewShape) {
+            paintGridCell(nextPixels, point.x, point.y, color)
+          }
+          return nextPixels
+        })
+        setStatus(`Shape drawn (${previewShape.length} cells)`)
+      } else {
+        setStatus('No shape drawn')
+      }
+
+      setShapeStart(null)
+      setPreviewShape([])
       return
     }
 
@@ -912,6 +1120,7 @@ function App() {
   }
 
   const clearCanvas = () => {
+    if (!isCanvasBlank(pixels) && !window.confirm('This will clear the canvas. Unsaved changes will be lost.')) return
     pushHistory()
     setPixels(makeBlankPixels())
     setStatus('Canvas cleared')
@@ -1030,6 +1239,73 @@ function App() {
     } catch {
       setStatus('That project code could not be loaded')
     }
+  }
+
+  const refreshProjects = () => setProjects(listProjects())
+
+  const saveCurrentAsProject = () => {
+    const name = newProjectName.trim() || `Project ${projects.length + 1}`
+    const meta = createProject(name, pixels)
+    if (meta) {
+      setActiveProjectId(meta.id)
+      setNewProjectName('')
+      refreshProjects()
+      setStatus(`Saved as "${meta.name}"`)
+    } else {
+      setStatus('Cannot save empty canvas')
+    }
+  }
+
+  const loadSavedProject = (id: string) => {
+    if (!isCanvasBlank(pixels) && !window.confirm('Unsaved changes will be saved automatically before switching.')) return
+    if (!isCanvasBlank(pixels) && activeProjectId) {
+      saveProject(activeProjectId, pixels)
+    }
+    const loaded = loadProject(id)
+    if (loaded) {
+      pushHistory()
+      setPixels(loaded)
+      setActiveProjectId(id)
+      refreshProjects()
+      setStatus('Project loaded')
+    } else {
+      setStatus('Failed to load project')
+    }
+  }
+
+  const startRenameProject = (id: string, currentName: string) => {
+    setEditingProjectId(id)
+    setEditingName(currentName)
+  }
+
+  const confirmRenameProject = () => {
+    if (!editingProjectId) return
+    const name = editingName.trim() || 'Untitled'
+    updateProject(editingProjectId, name, pixels)
+    setEditingProjectId(null)
+    setEditingName('')
+    refreshProjects()
+    setStatus('Project renamed')
+  }
+
+  const removeProject = (id: string) => {
+    if (!window.confirm('Delete this project permanently?')) return
+    deleteProject(id)
+    if (activeProjectId === id) setActiveProjectId(null)
+    refreshProjects()
+    setStatus('Project deleted')
+  }
+
+  const startNewProject = () => {
+    if (!isCanvasBlank(pixels) && !window.confirm('Unsaved changes will be saved automatically before starting a new project.')) return
+    if (!isCanvasBlank(pixels) && activeProjectId) {
+      saveProject(activeProjectId, pixels)
+    }
+    pushHistory()
+    setPixels(makeBlankPixels())
+    setActiveProjectId(null)
+    refreshProjects()
+    setStatus('New project started')
   }
 
   const pinCurrentColor = () => {
@@ -1152,6 +1428,25 @@ function App() {
                 />
                 <span>Cross colored cells</span>
               </label>
+            </div>
+          )}
+
+          {tool === 'shape' && (
+            <div className="control-group shape-options">
+              <span className="label">Shape</span>
+              <div className="segmented three-up">
+                {SHAPE_PRESETS.map((preset) => (
+                  <button
+                    className={shapeType === preset.id ? 'active' : ''}
+                    key={preset.id}
+                    onClick={() => setShapeType(preset.id)}
+                    type="button"
+                  >
+                    <span className="tool-icon" aria-hidden="true">{preset.icon}</span>
+                    <span>{preset.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1361,6 +1656,8 @@ function App() {
                 ? 'pixel-canvas eyedropper-mode'
                 : tool === 'path'
                 ? 'pixel-canvas path-mode'
+                : tool === 'shape'
+                ? 'pixel-canvas shape-mode'
                 : 'pixel-canvas'
             }
             height={VIEW_SIZE}
@@ -1393,36 +1690,48 @@ function App() {
         </button>
       </div>
 
-      <div className="quick-pins" aria-label="Pinned tools">
-        {pinnedTools.map((toolId) => {
-          const toolDef = TOOLS.find((t) => t.id === toolId)
-          return toolDef ? (
-            <button
-              key={toolId}
-              className={`quick-pin ${tool === toolId ? 'active' : ''}`}
-              onClick={() => setTool(toolId)}
-              title={toolDef.label}
-              type="button"
-            >
-              <span className="tool-icon" aria-hidden="true">{toolDef.icon}</span>
-            </button>
-          ) : null
-        })}
+      <div className={isQuickPinsOpen ? 'quick-pins' : 'quick-pins collapsed'}>
         <button
-          className="quick-pin color-pin"
-          onClick={() => {
-            toggleMenu('color')
-            setIsMenuOpen((open) => !open)
-          }}
-          title="Colors"
+          className="quick-pins-toggle"
+          onClick={() => setIsQuickPinsOpen((open) => !open)}
+          title={isQuickPinsOpen ? 'Collapse toolbar' : 'Expand toolbar'}
           type="button"
         >
-          <span className="tool-icon" aria-hidden="true" style={{ background: 'linear-gradient(135deg, #ef4444, #f97316, #facc15, #22c55e, #14b8a6, #38bdf8, #6366f1, #ec4899)' }}>C</span>
+          {isQuickPinsOpen ? '▼' : '▲'}
         </button>
-        {clipboard && (
-          <button className="quick-pin" onClick={pasteClipboard} title="Paste (Ctrl+V)" type="button">
-            <span className="tool-icon" aria-hidden="true">📋</span>
-          </button>
+        {isQuickPinsOpen && (
+          <>
+            {pinnedTools.map((toolId) => {
+              const toolDef = TOOLS.find((t) => t.id === toolId)
+              return toolDef ? (
+                <button
+                  key={toolId}
+                  className={`quick-pin ${tool === toolId ? 'active' : ''}`}
+                  onClick={() => setTool(toolId)}
+                  title={toolDef.label}
+                  type="button"
+                >
+                  <span className="tool-icon" aria-hidden="true">{toolDef.icon}</span>
+                </button>
+              ) : null
+            })}
+            <button
+              className="quick-pin color-pin"
+              onClick={() => {
+                toggleMenu('color')
+                setIsMenuOpen((open) => !open)
+              }}
+              title="Colors"
+              type="button"
+            >
+              <span className="tool-icon" aria-hidden="true" style={{ background: 'linear-gradient(135deg, #ef4444, #f97316, #facc15, #22c55e, #14b8a6, #38bdf8, #6366f1, #ec4899)' }}>C</span>
+            </button>
+            {clipboard && (
+              <button className="quick-pin" onClick={pasteClipboard} title="Paste (Ctrl+V)" type="button">
+                <span className="tool-icon" aria-hidden="true">📋</span>
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -1499,71 +1808,169 @@ function App() {
             Hide
           </button>
         </div>
+        <nav className="menu-tabs settings-tabs" aria-label="Settings sections">
+          <button
+            className={settingsTab === 'projects' ? 'menu-tab active' : 'menu-tab'}
+            onClick={() => setSettingsTab('projects')}
+            type="button"
+          >
+            <span className="menu-tab-icon" aria-hidden="true">📁</span>
+            <span>Projects</span>
+          </button>
+          <button
+            className={settingsTab === 'import-export' ? 'menu-tab active' : 'menu-tab'}
+            onClick={() => setSettingsTab('import-export')}
+            type="button"
+          >
+            <span className="menu-tab-icon" aria-hidden="true">✈</span>
+            <span>Import / Export</span>
+          </button>
+        </nav>
         <div className="side-menu-content">
-          <div className="control-group">
-            <span className="label">Export</span>
-            <div className="segmented">
-              {EXPORT_SCALES.map((preset) => (
-                <button
-                  className={exportScale === preset ? 'active' : ''}
-                  key={preset}
-                  onClick={() => setExportScale(preset)}
-                  type="button"
-                >
-                  {preset}x
+          {settingsTab === 'projects' && (
+            <>
+              <div className="control-group">
+                <span className="label">Projects</span>
+                <div className="new-project-row">
+                  <input
+                    className="project-name-input"
+                    onChange={(event) => setNewProjectName(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter') saveCurrentAsProject() }}
+                    placeholder="Project name..."
+                    type="text"
+                    value={newProjectName}
+                  />
+                  <button onClick={saveCurrentAsProject} type="button">
+                    Save
+                  </button>
+                </div>
+                <button onClick={startNewProject} type="button">
+                  New project
                 </button>
-              ))}
-            </div>
-            <label className="toggle-field">
-              <input
-                checked={exportTransparent}
-                onChange={(event) => setExportTransparent(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Transparent PNG</span>
-            </label>
-            <button onClick={exportPng} type="button">
-              Download PNG
-            </button>
-          </div>
+              </div>
 
-          <div className="control-group">
-            <span className="label">Import</span>
-            <input
-              accept="image/*"
-              className="hidden-input"
-              onChange={handleImportChange}
-              ref={importInputRef}
-              type="file"
-            />
-            <button onClick={() => importInputRef.current?.click()} type="button">
-              Import image
-            </button>
-            <button onClick={copyProjectCode} type="button">
-              Copy project code
-            </button>
-          </div>
+              {projects.length > 0 && (
+                <div className="control-group">
+                  <span className="label">Saved ({projects.length})</span>
+                  <div className="project-list">
+                    {projects.map((project) => (
+                      <div
+                        className={activeProjectId === project.id ? 'project-item active' : 'project-item'}
+                        key={project.id}
+                      >
+                        <ProjectPreview projectId={project.id} />
+                        <div className="project-item-info">
+                          {editingProjectId === project.id ? (
+                            <input
+                              className="project-edit-input"
+                              autoFocus
+                              onChange={(event) => setEditingName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') confirmRenameProject()
+                                if (event.key === 'Escape') { setEditingProjectId(null); setEditingName('') }
+                              }}
+                              onBlur={confirmRenameProject}
+                              value={editingName}
+                            />
+                          ) : (
+                            <span className="project-item-name">{project.name}</span>
+                          )}
+                          <span className="project-item-date">
+                            {new Date(project.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="project-item-actions">
+                          <button className="project-action-btn" onClick={() => loadSavedProject(project.id)} title="Load" type="button">
+                            ↑
+                          </button>
+                          <button
+                            className="project-action-btn"
+                            onClick={() => startRenameProject(project.id, project.name)}
+                            title="Rename"
+                            type="button"
+                          >
+                            ✎
+                          </button>
+                          <button className="project-action-btn danger" onClick={() => removeProject(project.id)} title="Delete" type="button">
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-          <div className="control-group project-code">
-            <label className="label" htmlFor="project-code">
-              Load code
-            </label>
-            <textarea
-              id="project-code"
-              onChange={(event) => setProjectCode(event.target.value)}
-              placeholder="Paste a PGS2 project code"
-              value={projectCode}
-            />
-            <button onClick={loadProjectCode} type="button">
-              Load project
-            </button>
-          </div>
+          {settingsTab === 'import-export' && (
+            <>
+              <div className="control-group">
+                <span className="label">Export</span>
+                <div className="segmented">
+                  {EXPORT_SCALES.map((preset) => (
+                    <button
+                      className={exportScale === preset ? 'active' : ''}
+                      key={preset}
+                      onClick={() => setExportScale(preset)}
+                      type="button"
+                    >
+                      {preset}x
+                    </button>
+                  ))}
+                </div>
+                <label className="toggle-field">
+                  <input
+                    checked={exportTransparent}
+                    onChange={(event) => setExportTransparent(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>Transparent PNG</span>
+                </label>
+                <button onClick={exportPng} type="button">
+                  Download PNG
+                </button>
+              </div>
 
-          <div className="control-group">
-            <button className="danger" onClick={clearCanvas} type="button">
-              Clear canvas
-            </button>
-          </div>
+              <div className="control-group">
+                <span className="label">Import</span>
+                <input
+                  accept="image/*"
+                  className="hidden-input"
+                  onChange={handleImportChange}
+                  ref={importInputRef}
+                  type="file"
+                />
+                <button onClick={() => importInputRef.current?.click()} type="button">
+                  Import image
+                </button>
+                <button onClick={copyProjectCode} type="button">
+                  Copy project code
+                </button>
+              </div>
+
+              <div className="control-group project-code">
+                <label className="label" htmlFor="project-code">
+                  Load code
+                </label>
+                <textarea
+                  id="project-code"
+                  onChange={(event) => setProjectCode(event.target.value)}
+                  placeholder="Paste a PGS2 project code"
+                  value={projectCode}
+                />
+                <button onClick={loadProjectCode} type="button">
+                  Load project
+                </button>
+              </div>
+
+              <div className="control-group">
+                <button className="danger" onClick={clearCanvas} type="button">
+                  Clear canvas
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </aside>
     </main>

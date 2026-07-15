@@ -1,4 +1,4 @@
-import type { Tool, MenuId } from '../types'
+import type { Tool, MenuId, ShapeType } from '../types'
 
 export const CANVAS_SIZE = 128
 export const VIEW_SIZE = 768
@@ -16,6 +16,13 @@ export const TOOLS: Array<{ id: Tool; icon: string; label: string }> = [
   { id: 'eyedropper', icon: '💧', label: 'eyedropper' },
   { id: 'select', icon: '⛶', label: 'select' },
   { id: 'path', icon: 'P', label: 'path' },
+  { id: 'shape', icon: '□', label: 'shape' },
+]
+
+export const SHAPE_PRESETS: Array<{ id: ShapeType; icon: string; label: string }> = [
+  { id: 'rectangle', icon: '□', label: 'Rect' },
+  { id: 'circle', icon: '○', label: 'Circle' },
+  { id: 'line', icon: '╱', label: 'Line' },
 ]
 
 export const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
@@ -27,6 +34,8 @@ export const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
 export const STORAGE_KEY = 'pixel-grid-studio-draft'
 export const PINNED_COLORS_KEY = 'pixel-grid-studio-pinned-colors'
 export const PINNED_TOOLS_KEY = 'pixel-grid-studio-pinned-tools'
+export const PROJECTS_INDEX_KEY = 'pixel-grid-studio-projects'
+export const PROJECT_PREFIX = 'pixel-grid-studio-project-'
 
 export const PALETTE = [
   '#111827',
