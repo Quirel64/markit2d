@@ -1,6 +1,6 @@
 export type Tool = 'view' | 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'select' | 'path'
 export type Pixel = string | null
-export type MenuId = 'tools' | 'grid' | 'color' | 'project'
+export type MenuId = 'tools' | 'grid' | 'color'
 
 export type Viewport = {
   zoom: number

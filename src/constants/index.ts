@@ -19,10 +19,9 @@ export const TOOLS: Array<{ id: Tool; icon: string; label: string }> = [
 ]
 
 export const MENUS: Array<{ id: MenuId; icon: string; label: string }> = [
-  { id: 'tools', icon: 'T', label: 'Tools' },
-  { id: 'grid', icon: 'G', label: 'Grid' },
-  { id: 'color', icon: 'C', label: 'Color' },
-  { id: 'project', icon: 'P', label: 'Project' },
+  { id: 'tools', icon: '✎', label: 'Tools' },
+  { id: 'grid', icon: '▦', label: 'Grid' },
+  { id: 'color', icon: '◉', label: 'Color' },
 ]
 
 export const STORAGE_KEY = 'pixel-grid-studio-draft'

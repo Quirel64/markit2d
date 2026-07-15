@@ -89,8 +89,10 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isPinMode, setIsPinMode] = useState(false)
   const [viewport, setViewport] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 })
+  const [showGridLines, setShowGridLines] = useState(true)
 
   const blockSize = useMemo(() => CANVAS_SIZE / gridSize, [gridSize])
 
@@ -244,24 +246,26 @@ function App() {
       ctx.restore()
     }
 
-    const gridStep = VIEW_SIZE / gridSize
-    ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
-    ctx.lineWidth = 1 / viewport.zoom
+    if (showGridLines) {
+      const gridStep = VIEW_SIZE / gridSize
+      ctx.strokeStyle = gridSize >= 64 ? 'rgba(15, 23, 42, 0.14)' : 'rgba(15, 23, 42, 0.2)'
+      ctx.lineWidth = 1 / viewport.zoom
 
-    for (let line = 0; line <= gridSize; line += 1) {
-      const pos = line * gridStep
-      ctx.beginPath()
-      ctx.moveTo(pos, 0)
-      ctx.lineTo(pos, VIEW_SIZE)
-      ctx.stroke()
-      ctx.beginPath()
-      ctx.moveTo(0, pos)
-      ctx.lineTo(VIEW_SIZE, pos)
-      ctx.stroke()
+      for (let line = 0; line <= gridSize; line += 1) {
+        const pos = line * gridStep
+        ctx.beginPath()
+        ctx.moveTo(pos, 0)
+        ctx.lineTo(pos, VIEW_SIZE)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(0, pos)
+        ctx.lineTo(VIEW_SIZE, pos)
+        ctx.stroke()
+      }
     }
 
     ctx.restore()
-  }, [color, gridSize, pathStart, pixels, previewPath, tool, viewport, floatingSelection, selection])
+  }, [color, gridSize, pathStart, pixels, previewPath, showGridLines, tool, viewport, floatingSelection, selection])
 
   const pushHistory = useCallback(() => {
     setHistory((items) => [...items.slice(-39), clonePixels(pixels)])
@@ -1185,21 +1189,33 @@ function App() {
 
     if (activeMenu === 'grid') {
       return (
-        <div className="control-group">
-          <span className="label">Grid</span>
-          <div className="segmented">
-            {GRID_PRESETS.map((preset) => (
-              <button
-                className={gridSize === preset ? 'active' : ''}
-                key={preset}
-                onClick={() => setGridSize(preset)}
-                type="button"
-              >
-                {preset}
-              </button>
-            ))}
+        <>
+          <div className="control-group">
+            <span className="label">Grid</span>
+            <div className="segmented">
+              {GRID_PRESETS.map((preset) => (
+                <button
+                  className={gridSize === preset ? 'active' : ''}
+                  key={preset}
+                  onClick={() => setGridSize(preset)}
+                  type="button"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+          <div className="control-group">
+            <label className="toggle-field">
+              <input
+                checked={showGridLines}
+                onChange={(event) => setShowGridLines(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Show grid lines</span>
+            </label>
+          </div>
+        </>
       )
     }
 
@@ -1311,74 +1327,7 @@ function App() {
       )
     }
 
-    return (
-      <>
-        <div className="control-group">
-          <span className="label">Export</span>
-          <div className="segmented">
-            {EXPORT_SCALES.map((preset) => (
-              <button
-                className={exportScale === preset ? 'active' : ''}
-                key={preset}
-                onClick={() => setExportScale(preset)}
-                type="button"
-              >
-                {preset}x
-              </button>
-            ))}
-          </div>
-          <label className="toggle-field">
-            <input
-              checked={exportTransparent}
-              onChange={(event) => setExportTransparent(event.target.checked)}
-              type="checkbox"
-            />
-            <span>Transparent PNG</span>
-          </label>
-          <button onClick={exportPng} type="button">
-            Download PNG
-          </button>
-        </div>
-
-        <div className="control-group">
-          <span className="label">Import</span>
-          <input
-            accept="image/*"
-            className="hidden-input"
-            onChange={handleImportChange}
-            ref={importInputRef}
-            type="file"
-          />
-          <button onClick={() => importInputRef.current?.click()} type="button">
-            Import image
-          </button>
-          <button onClick={copyProjectCode} type="button">
-            Copy project code
-          </button>
-        </div>
-
-        <div className="control-group project-code">
-          <label className="label" htmlFor="project-code">
-            Load code
-          </label>
-          <textarea
-            id="project-code"
-            onChange={(event) => setProjectCode(event.target.value)}
-            placeholder="Paste a PGS2 project code"
-            value={projectCode}
-          />
-          <button onClick={loadProjectCode} type="button">
-            Load project
-          </button>
-        </div>
-
-        <div className="control-group">
-          <button className="danger" onClick={clearCanvas} type="button">
-            Clear canvas
-          </button>
-        </div>
-      </>
-    )
+    return null
   }
 
   return (
@@ -1388,7 +1337,17 @@ function App() {
           <p className="eyebrow">Prototype</p>
           <h1>Pixel Grid Studio</h1>
         </div>
-        <div className="status">{status}</div>
+        <div className="topbar-right">
+          <div className="status">{status}</div>
+          <button
+            className={isSettingsOpen ? 'settings-btn active' : 'settings-btn'}
+            onClick={() => setIsSettingsOpen((open) => !open)}
+            title="Settings"
+            type="button"
+          >
+            ⚙
+          </button>
+        </div>
       </section>
 
       <section className="workspace">
@@ -1525,11 +1484,87 @@ function App() {
               title={item.label}
               type="button"
             >
+              <span className="menu-tab-icon" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
         <div className="side-menu-content">{renderActiveMenu()}</div>
+      </aside>
+
+      <aside className={isSettingsOpen ? 'settings-menu open' : 'settings-menu'} aria-hidden={!isSettingsOpen}>
+        <div className="side-menu-header">
+          <span className="label">Settings</span>
+          <button className="menu-close" onClick={() => setIsSettingsOpen(false)} type="button">
+            Hide
+          </button>
+        </div>
+        <div className="side-menu-content">
+          <div className="control-group">
+            <span className="label">Export</span>
+            <div className="segmented">
+              {EXPORT_SCALES.map((preset) => (
+                <button
+                  className={exportScale === preset ? 'active' : ''}
+                  key={preset}
+                  onClick={() => setExportScale(preset)}
+                  type="button"
+                >
+                  {preset}x
+                </button>
+              ))}
+            </div>
+            <label className="toggle-field">
+              <input
+                checked={exportTransparent}
+                onChange={(event) => setExportTransparent(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Transparent PNG</span>
+            </label>
+            <button onClick={exportPng} type="button">
+              Download PNG
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="label">Import</span>
+            <input
+              accept="image/*"
+              className="hidden-input"
+              onChange={handleImportChange}
+              ref={importInputRef}
+              type="file"
+            />
+            <button onClick={() => importInputRef.current?.click()} type="button">
+              Import image
+            </button>
+            <button onClick={copyProjectCode} type="button">
+              Copy project code
+            </button>
+          </div>
+
+          <div className="control-group project-code">
+            <label className="label" htmlFor="project-code">
+              Load code
+            </label>
+            <textarea
+              id="project-code"
+              onChange={(event) => setProjectCode(event.target.value)}
+              placeholder="Paste a PGS2 project code"
+              value={projectCode}
+            />
+            <button onClick={loadProjectCode} type="button">
+              Load project
+            </button>
+          </div>
+
+          <div className="control-group">
+            <button className="danger" onClick={clearCanvas} type="button">
+              Clear canvas
+            </button>
+          </div>
+        </div>
       </aside>
     </main>
   )
