@@ -1634,15 +1634,20 @@ function App() {
     <main className="app-shell">
       <section className="topbar">
         <div className="topbar-left">
-          <button
-            aria-expanded={isMenuOpen}
-            className={isMenuOpen ? 'menu-toggle active' : 'menu-toggle'}
-            onClick={() => setIsMenuOpen((open) => !open)}
-            title="Toggle menu"
-            type="button"
-          >
-            {isMenuOpen ? '✕' : '☰'}
-          </button>
+          {MENUS.map((item) => (
+            <button
+              aria-label={item.label}
+              className={activeMenu === item.id && isMenuOpen ? 'menu-tab active' : 'menu-tab'}
+              key={item.id}
+              onClick={() => toggleMenu(item.id)}
+              title={item.label}
+              type="button"
+            >
+              <span className="menu-tab-icon" aria-hidden="true">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+          <span className="topbar-divider" />
           <button disabled={!history.length} onClick={undo} title="Undo" type="button">
             Undo
           </button>
@@ -1664,28 +1669,28 @@ function App() {
       </section>
 
       <div className="main-content">
-        <div className="menu-panel">
-          <nav className="menu-tabs" aria-label="Editor menu sections">
-            {MENUS.map((item) => (
-              <button
-                aria-label={item.label}
-                className={activeMenu === item.id ? 'menu-tab active' : 'menu-tab'}
-                key={item.id}
-                onClick={() => toggleMenu(item.id)}
-                title={item.label}
-                type="button"
-              >
-                <span className="menu-tab-icon" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-          {isMenuOpen && (
-            <div className="menu-panel-content">{renderActiveMenu()}</div>
-          )}
-        </div>
+        <aside className="tool-sidebar" aria-label="Drawing tools">
+          {TOOLS.map((t) => (
+            <button
+              aria-label={t.label}
+              className={tool === t.id ? 'sidebar-tool active' : 'sidebar-tool'}
+              key={t.id}
+              onClick={() => setTool(t.id)}
+              title={t.label}
+              type="button"
+            >
+              <span aria-hidden="true">{t.icon}</span>
+            </button>
+          ))}
+        </aside>
 
         <section className="canvas-stage" aria-label="Pixel canvas">
+          {isMenuOpen && (
+            <>
+              <div className="floating-panel-backdrop" onClick={() => setIsMenuOpen(false)} />
+              <div className="floating-panel">{renderActiveMenu()}</div>
+            </>
+          )}
           <canvas
             aria-label="Drawing surface"
             className={
