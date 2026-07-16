@@ -1743,10 +1743,7 @@ function App() {
             })}
             <button
               className="quick-pin color-pin"
-              onClick={() => {
-                toggleMenu('color')
-                setIsMenuOpen((open) => !open)
-              }}
+              onClick={() => toggleMenu('color')}
               title="Colors"
               type="button"
             >

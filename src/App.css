@@ -10,7 +10,6 @@
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   height: 44px;
   min-height: 44px;
@@ -46,6 +45,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .topbar-status {
@@ -54,7 +56,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  max-width: 160px;
+  min-width: 0;
 }
 
 .eyebrow,
@@ -112,6 +115,7 @@
   overflow-y: auto;
   min-width: 48px;
   max-width: 48px;
+  min-height: 0;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
@@ -140,9 +144,11 @@
 .canvas-stage {
   position: relative;
   flex: 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 0;
+  min-width: 0;
   padding: 12px;
   border: 1px solid #d6dce7;
   border-radius: 8px;
@@ -160,6 +166,7 @@
   background-size: 16px 16px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   overflow: hidden;
+  container-type: size;
 }
 
 .floating-panel-backdrop {
@@ -195,9 +202,9 @@
 }
 
 .pixel-canvas {
-  width: min(100%, 768px);
-  max-height: 100%;
-  aspect-ratio: 1;
+  display: block;
+  width: min(100cqi, 100cqh, 768px);
+  height: min(100cqi, 100cqh, 768px);
   border: 1px solid #0f172a;
   border-radius: 6px;
   background: #ffffff;
@@ -466,56 +473,6 @@ button:disabled {
   accent-color: #0f766e;
 }
 
-.canvas-stage {
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid #d6dce7;
-  border-radius: 8px;
-  background:
-    linear-gradient(45deg, #e2e8f0 25%, transparent 25%),
-    linear-gradient(-45deg, #e2e8f0 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #e2e8f0 75%),
-    linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
-  background-color: #f8fafc;
-  background-position:
-    0 0,
-    0 8px,
-    8px -8px,
-    -8px 0;
-  background-size: 16px 16px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-}
-
-.pixel-canvas {
-  width: min(100%, 768px);
-  aspect-ratio: 1;
-  border: 1px solid #0f172a;
-  border-radius: 6px;
-  background: #ffffff;
-  cursor: crosshair;
-  image-rendering: pixelated;
-  touch-action: none;
-}
-
-.pixel-canvas.view-mode {
-  cursor: grab;
-  touch-action: none;
-}
-
-.pixel-canvas.eyedropper-mode {
-  cursor: crosshair;
-}
-
-.pixel-canvas.path-mode {
-  cursor: cell;
-}
-
-.pixel-canvas.shape-mode {
-  cursor: crosshair;
-}
-
 .action-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -527,23 +484,19 @@ button:disabled {
 }
 
 .quick-pins {
-  position: fixed;
   z-index: 30;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   gap: 6px;
   padding: 6px 10px;
-  max-width: 90vw;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid #d6dce7;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   scrollbar-width: thin;
+  min-height: 42px;
 }
 
 .quick-pins::-webkit-scrollbar {
@@ -556,7 +509,8 @@ button:disabled {
 }
 
 .quick-pins.collapsed {
-  padding: 0px 0px;
+  padding: 0;
+  min-height: 0;
 }
 
 .quick-pins-toggle {
@@ -628,22 +582,21 @@ button:disabled {
 }
 
 .selection-bar {
-  position: fixed;
-  z-index: 31;
-  bottom: 76px;
+  position: absolute;
+  z-index: 25;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 6px;
   padding: 6px 10px;
-  max-width: 90vw;
+  max-width: 90%;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid #d6dce7;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   scrollbar-width: thin;
 }
 
@@ -928,8 +881,8 @@ button:disabled {
   }
 
   .topbar-status {
-    max-width: 80px;
-    font-size: 12px;
+    max-width: 60px;
+    font-size: 11px;
   }
 
   .settings-btn {
@@ -940,7 +893,7 @@ button:disabled {
   }
 
   .floating-panel {
-    max-height: 40svh;
+    max-height: 35svh;
     padding: 10px;
   }
 
