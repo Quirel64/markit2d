@@ -1353,7 +1353,12 @@ function App() {
   )
 
   const toggleMenu = (menuId: MenuId) => {
-    setActiveMenu(menuId)
+    if (activeMenu === menuId && isMenuOpen) {
+      setIsMenuOpen(false)
+    } else {
+      setActiveMenu(menuId)
+      setIsMenuOpen(true)
+    }
   }
 
   const renderActiveMenu = () => {
@@ -1631,12 +1636,12 @@ function App() {
         <div className="topbar-left">
           <button
             aria-expanded={isMenuOpen}
-            className="menu-toggle"
+            className={isMenuOpen ? 'menu-toggle active' : 'menu-toggle'}
             onClick={() => setIsMenuOpen((open) => !open)}
-            title="Menu"
+            title="Toggle menu"
             type="button"
           >
-            Menu
+            {isMenuOpen ? '✕' : '☰'}
           </button>
           <button disabled={!history.length} onClick={undo} title="Undo" type="button">
             Undo
@@ -1658,7 +1663,28 @@ function App() {
         </div>
       </section>
 
-      <section className="workspace">
+      <div className="main-content">
+        <div className="menu-panel">
+          <nav className="menu-tabs" aria-label="Editor menu sections">
+            {MENUS.map((item) => (
+              <button
+                aria-label={item.label}
+                className={activeMenu === item.id ? 'menu-tab active' : 'menu-tab'}
+                key={item.id}
+                onClick={() => toggleMenu(item.id)}
+                title={item.label}
+                type="button"
+              >
+                <span className="menu-tab-icon" aria-hidden="true">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          {isMenuOpen && (
+            <div className="menu-panel-content">{renderActiveMenu()}</div>
+          )}
+        </div>
+
         <section className="canvas-stage" aria-label="Pixel canvas">
           <canvas
             aria-label="Drawing surface"
@@ -1683,7 +1709,7 @@ function App() {
             width={VIEW_SIZE}
           />
         </section>
-      </section>
+      </div>
 
       <div className={isQuickPinsOpen ? 'quick-pins' : 'quick-pins collapsed'}>
         <button
@@ -1770,31 +1796,6 @@ function App() {
           </button>
         </div>
       )}
-
-      <aside className={isMenuOpen ? 'side-menu open' : 'side-menu'} aria-hidden={!isMenuOpen}>
-        <div className="side-menu-header">
-          <span className="label">Menu</span>
-          <button className="menu-close" onClick={() => setIsMenuOpen(false)} type="button">
-            Hide
-          </button>
-        </div>
-        <nav className="menu-tabs" aria-label="Editor menu sections">
-          {MENUS.map((item) => (
-            <button
-              aria-label={item.label}
-              className={activeMenu === item.id ? 'menu-tab active' : 'menu-tab'}
-              key={item.id}
-              onClick={() => toggleMenu(item.id)}
-              title={item.label}
-              type="button"
-            >
-              <span className="menu-tab-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="side-menu-content">{renderActiveMenu()}</div>
-      </aside>
 
       <aside className={isSettingsOpen ? 'settings-menu open' : 'settings-menu'} aria-hidden={!isSettingsOpen}>
         <div className="side-menu-header">
