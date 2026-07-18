@@ -589,22 +589,19 @@ button:disabled {
 }
 
 .selection-bar {
-  position: absolute;
-  z-index: 35;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   gap: 6px;
   padding: 6px 10px;
-  max-width: 90%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid #d6dce7;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   scrollbar-width: thin;
+  min-height: 42px;
+  align-items: center;
 }
 
 .selection-bar::-webkit-scrollbar {

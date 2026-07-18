@@ -680,16 +680,19 @@ function App() {
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
 
-    if (tool === 'view') {
-      const point = pointerToCanvasPoint(event)
-      if (!point) return
+    const point = pointerToCanvasPoint(event)
+    if (!point) return
 
-      activePointersRef.current.set(event.pointerId, point)
-      const pointers = Array.from(activePointersRef.current.values())
-      gestureRef.current =
-        pointers.length >= 2
-          ? { lastCenter: getCenter(pointers[0], pointers[1]), lastDistance: getDistance(pointers[0], pointers[1]) }
-          : { lastCenter: point, lastDistance: null }
+    activePointersRef.current.set(event.pointerId, point)
+    const pointers = Array.from(activePointersRef.current.values())
+
+    if (pointers.length >= 2) {
+      gestureRef.current = { lastCenter: getCenter(pointers[0], pointers[1]), lastDistance: getDistance(pointers[0], pointers[1]) }
+      return
+    }
+
+    if (tool === 'view') {
+      gestureRef.current = { lastCenter: point, lastDistance: null }
       return
     }
 
@@ -754,6 +757,17 @@ function App() {
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointerToCanvasPoint(event)
+    if (point) {
+      activePointersRef.current.set(event.pointerId, point)
+    }
+    const pointers = Array.from(activePointersRef.current.values())
+
+    if (pointers.length >= 2) {
+      updateViewGesture(event)
+      return
+    }
+
     if (tool === 'view') {
       updateViewGesture(event)
       return
@@ -1018,8 +1032,6 @@ function App() {
     if (!canvas) return
 
     const handleNativeWheel = (event: WheelEvent) => {
-      if (tool !== 'view') return
-
       event.preventDefault()
       const point = pointerToCanvasPoint(event)
       if (!point) return
@@ -1713,48 +1725,49 @@ function App() {
             ref={canvasRef}
             width={VIEW_SIZE}
           />
-          {floatingSelection && (
-            <div className="selection-bar" aria-label="Selection controls">
-              <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
-                <span className="tool-icon" aria-hidden="true">✓</span>
-              </button>
-              <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
-                <span className="tool-icon" aria-hidden="true">✕</span>
-              </button>
-              <button className="quick-pin" onClick={copySelection} title="Copy (Ctrl+C)" type="button">
-                <span className="tool-icon" aria-hidden="true">📄</span>
-              </button>
-              <button className="quick-pin" onClick={cutSelection} title="Cut (Ctrl+X)" type="button">
-                <span className="tool-icon" aria-hidden="true">✂️</span>
-              </button>
-              <button
-                className="quick-pin"
-                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
-                title="Flip H"
-                type="button"
-              >
-                <span className="tool-icon" aria-hidden="true">⇔</span>
-              </button>
-              <button
-                className="quick-pin"
-                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
-                title="Flip V"
-                type="button"
-              >
-                <span className="tool-icon" aria-hidden="true">⇕</span>
-              </button>
-              <button
-                className="quick-pin"
-                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
-                title="Rotate 90°"
-                type="button"
-              >
-                <span className="tool-icon" aria-hidden="true">↻</span>
-              </button>
-            </div>
-          )}
         </section>
       </div>
+
+      {floatingSelection && (
+        <div className="selection-bar" aria-label="Selection controls">
+          <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
+            <span className="tool-icon" aria-hidden="true">✓</span>
+          </button>
+          <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
+            <span className="tool-icon" aria-hidden="true">✕</span>
+          </button>
+          <button className="quick-pin" onClick={copySelection} title="Copy (Ctrl+C)" type="button">
+            <span className="tool-icon" aria-hidden="true">📄</span>
+          </button>
+          <button className="quick-pin" onClick={cutSelection} title="Cut (Ctrl+X)" type="button">
+            <span className="tool-icon" aria-hidden="true">✂️</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
+            title="Flip H"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">⇔</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
+            title="Flip V"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">⇕</span>
+          </button>
+          <button
+            className="quick-pin"
+            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
+            title="Rotate 90°"
+            type="button"
+          >
+            <span className="tool-icon" aria-hidden="true">↻</span>
+          </button>
+        </div>
+      )}
 
       <div className={isQuickPinsOpen ? 'quick-pins' : 'quick-pins collapsed'}>
         <button
