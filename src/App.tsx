@@ -1713,6 +1713,46 @@ function App() {
             ref={canvasRef}
             width={VIEW_SIZE}
           />
+          {floatingSelection && (
+            <div className="selection-bar" aria-label="Selection controls">
+              <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
+                <span className="tool-icon" aria-hidden="true">✓</span>
+              </button>
+              <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
+                <span className="tool-icon" aria-hidden="true">✕</span>
+              </button>
+              <button className="quick-pin" onClick={copySelection} title="Copy (Ctrl+C)" type="button">
+                <span className="tool-icon" aria-hidden="true">📄</span>
+              </button>
+              <button className="quick-pin" onClick={cutSelection} title="Cut (Ctrl+X)" type="button">
+                <span className="tool-icon" aria-hidden="true">✂️</span>
+              </button>
+              <button
+                className="quick-pin"
+                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
+                title="Flip H"
+                type="button"
+              >
+                <span className="tool-icon" aria-hidden="true">⇔</span>
+              </button>
+              <button
+                className="quick-pin"
+                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
+                title="Flip V"
+                type="button"
+              >
+                <span className="tool-icon" aria-hidden="true">⇕</span>
+              </button>
+              <button
+                className="quick-pin"
+                onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
+                title="Rotate 90°"
+                type="button"
+              >
+                <span className="tool-icon" aria-hidden="true">↻</span>
+              </button>
+            </div>
+          )}
         </section>
       </div>
 
@@ -1757,47 +1797,6 @@ function App() {
           </>
         )}
       </div>
-
-      {floatingSelection && (
-        <div className="selection-bar" aria-label="Selection controls">
-          <button className="quick-pin" onClick={commitFloatingSelection} title="Commit (Enter)" type="button">
-            <span className="tool-icon" aria-hidden="true">✓</span>
-          </button>
-          <button className="quick-pin" onClick={() => { setFloatingSelection(null); setStatus('Canceled') }} title="Cancel (Esc)" type="button">
-            <span className="tool-icon" aria-hidden="true">✕</span>
-          </button>
-          <button className="quick-pin" onClick={copySelection} title="Copy (Ctrl+C)" type="button">
-            <span className="tool-icon" aria-hidden="true">📄</span>
-          </button>
-          <button className="quick-pin" onClick={cutSelection} title="Cut (Ctrl+X)" type="button">
-            <span className="tool-icon" aria-hidden="true">✂️</span>
-          </button>
-          <button
-            className="quick-pin"
-            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipX: !prev.transform.flipX } } : prev)}
-            title="Flip H"
-            type="button"
-          >
-            <span className="tool-icon" aria-hidden="true">⇔</span>
-          </button>
-          <button
-            className="quick-pin"
-            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, flipY: !prev.transform.flipY } } : prev)}
-            title="Flip V"
-            type="button"
-          >
-            <span className="tool-icon" aria-hidden="true">⇕</span>
-          </button>
-          <button
-            className="quick-pin"
-            onClick={() => setFloatingSelection((prev) => prev ? { ...prev, transform: { ...prev.transform, rotation: (prev.transform.rotation + 90) % 360 } } : prev)}
-            title="Rotate 90°"
-            type="button"
-          >
-            <span className="tool-icon" aria-hidden="true">↻</span>
-          </button>
-        </div>
-      )}
 
       <aside className={isSettingsOpen ? 'settings-menu open' : 'settings-menu'} aria-hidden={!isSettingsOpen}>
         <div className="side-menu-header">
