@@ -1,4 +1,6 @@
-const CACHE_NAME = 'pixel-grid-studio-v2'
+// IMPORTANT: Bump this version on every deploy to invalidate old caches.
+// The browser will download the new SW, activate it, and delete old caches.
+const CACHE_NAME = 'pixel-grid-studio-v3'
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.svg']
 
 self.addEventListener('install', (event) => {

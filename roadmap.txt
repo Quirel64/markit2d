@@ -1,0 +1,291 @@
+================================================================================
+                        PIXEL GRID STUDIO - ROADMAP
+================================================================================
+
+A browser-based pixel art editor built with React 19 + TypeScript + Vite.
+Designed for both PC and mobile with a unified layout.
+
+================================================================================
+                         FILE STRUCTURE
+================================================================================
+
+src/
+  App.tsx              - Main component (~2000 lines). Contains all UI layout,
+                         tool logic, canvas rendering, menu state, project
+                         management, and event handlers.
+
+  App.css              - All styles (~960 lines). Flex layout, floating panels,
+                         tool sidebar, canvas stage, responsive rules.
+
+  types/index.ts       - Type definitions: Tool, ShapeType, Pixel, MenuId,
+                         ProjectMeta, Viewport, Selection, FloatingSelection,
+                         PathOptions, HslColor.
+
+  constants/index.ts   - Constants: CANVAS_SIZE (128), VIEW_SIZE (768),
+                         GRID_PRESETS, BRUSH_PRESETS, EXPORT_SCALES,
+                         TOOLS (8 tools), MENUS (3 tabs), SHAPE_PRESETS,
+                         PALETTE (28 colors), storage keys.
+
+  utils/
+    canvas.ts          - makeBlankPixels, clonePixels, indexOf, clamp.
+                         Pixel grid data operations.
+    viewport.ts        - clampViewport, getDistance, getCenter.
+                         Zoom/pan math and pointer helpers.
+    color.ts           - hexToRgb, hexToHsl, hslToHex, shiftColor.
+                         Color conversion and manipulation.
+    pathfinding.ts     - A* pathfinding for the path tool.
+    project.ts         - encodeProject, decodeProject, listProjects,
+                         loadProject, saveProject, deleteProject,
+                         createProject, updateProject, isCanvasBlank.
+                         Multi-project localStorage management.
+
+
+================================================================================
+                      COMPLETED FEATURES (v0.1)
+================================================================================
+
+--- LAYOUT (Current) ---
+
+  [x] Top-docked split layout
+      - Menu tabs (Tools/Grid/Color) inline in the topbar
+      - Left sidebar with tool icons (PC only, >=768px)
+      - Canvas fills remaining space via flex
+      - Quick pins bar at the bottom
+      - Settings panel slides from the right
+
+  [x] Floating menu panels
+      - Click a menu tab -> panel appears ON TOP of canvas
+      - Slide-down + fade animation (200ms ease)
+      - Click backdrop to dismiss
+      - Max-height 50svh, scrolls internally
+
+  [x] Responsive design
+      - PC: sidebar + floating panels + full topbar
+      - Mobile: no sidebar, compact topbar with horizontal scroll
+      - Settings menu adapts to screen width
+
+--- TOOLS ---
+
+  [x] View tool (pan/zoom)
+  [x] Pencil tool
+  [x] Eraser tool
+  [x] Fill tool (flood fill)
+  [x] Eyedropper tool
+  [x] Select tool (rectangle select, copy/cut/paste, flip, rotate)
+  [x] Path tool (A* pathfinding, diagonal toggle, color-crossing toggle)
+  [x] Shape tool (rectangle, circle, line with live preview)
+
+  All tools accessible from:
+    - Left sidebar (PC)
+    - Tools menu in floating panel
+    - Quick pins bar (pinned tools)
+
+--- CANVAS ---
+
+  [x] 128x128 pixel grid (CANVAS_SIZE)
+  [x] Display at 768x768 (VIEW_SIZE)
+  [x] CSS container-query based sizing (never clips)
+  [x] Grid lines toggle
+  [x] Grid size presets (8x8 to 64x64)
+
+--- ZOOM & PAN ---
+
+  [x] Always-on pinch-to-zoom (mobile, any tool)
+  [x] Always-on scroll-to-zoom (PC, any tool)
+  [x] View tool for pan (single finger/mouse drag)
+  [x] Zoom range: 1x to 16x
+
+--- COLOR ---
+
+  [x] 28-color preset palette
+  [x] Shade ring (8 variants + center)
+  [x] Custom color picker (native input)
+  [x] Pin/unpin colors
+  [x] Pinned colors palette
+  [x] Eyedropper tool to pick from canvas
+
+--- PROJECT MANAGEMENT ---
+
+  [x] Multi-project storage (localStorage)
+  [x] Save/load/rename/delete projects
+  [x] 48x48 mini canvas previews
+  [x] New project creation with naming
+  [x] Unsaved data warnings (confirm dialogs)
+
+--- EXPORT / IMPORT ---
+
+  [x] Export as PNG (1x, 4x, 8x, 16x scale)
+  [x] Transparent PNG option
+  [x] Import image (resizes to canvas)
+  [x] Copy project code (base64 encoded)
+  [x] Load project code
+  [x] Clear canvas
+
+--- QUICK PINS ---
+
+  [x] Pin/unpin tools to bottom bar
+  [x] Collapse/expand toggle
+  [x] Color quick pin (opens color menu)
+  [x] Paste clipboard pin (when data available)
+
+--- SELECTION ---
+
+  [x] Rectangle selection with marching ants
+  [x] Copy/Cut/Paste (Ctrl+C/X/V)
+  [x] Flip horizontal/vertical
+  [x] Rotate 90 degrees
+  [x] Drag to reposition floating selection
+  [x] Commit (Enter) / Cancel (Esc)
+  [x] Selection bar appears between canvas and quick-pins
+
+--- UI POLISH ---
+
+  [x] Floating panel slide animation (200ms ease)
+  [x] Settings menu slide animation (160ms ease)
+  [x] Topbar horizontal scroll on mobile
+  [x] Status text truncation with ellipsis
+
+--- PWA ---
+
+  [x] Service worker with offline caching (cache name must be bumped per deploy)
+  [x] Web manifest for installability
+  [x] Apple mobile web app support
+
+
+================================================================================
+                      FUTURE IDEAS
+================================================================================
+
+--- HIGH PRIORITY ---
+
+  [ ] Layers support
+      - Add/remove/reorder layers
+      - Layer opacity
+      - Layer visibility toggle
+      - Merge layers
+      - Layer preview thumbnails
+
+  [ ] Custom palettes
+      - User-created palettes (save/load/delete)
+      - Base palettes:
+        * Gameboy (4 colors: #0f380f, #306230, #8bac0f, #9bbc0f)
+        * NES (54 colors)
+        * Endesga 32
+        * Sweetie 16
+        * Pico-8 (16 colors)
+        * Custom "Pixel Grid Studio" starter palette
+      - Import palette from .hex/.gpl/.pal files
+      - Palette sharing via project code
+
+--- MEDIUM PRIORITY ---
+
+  [ ] Animation timeline
+      - Frame-based animation (like Aseprite)
+      - Add/remove/duplicate/reorder frames
+      - Onion skinning (ghost previous/next frames)
+      - FPS control
+      - Preview animation
+      - Export as GIF or spritesheet
+
+  [ ] Keyboard shortcuts
+      - B = Pencil, E = Eraser, G = Fill, I = Eyedropper
+      - V = View, S = Select, P = Path, R = Rectangle
+      - Ctrl+Z = Undo, Ctrl+Y = Redo
+      - [ / ] = Brush size
+      - Space+drag = Pan (like Photoshop)
+      - Ctrl+scroll = Zoom
+
+  [ ] Improved undo/redo
+      - Visual history panel (thumbnail list)
+      - Jump to any point in history
+      - Grouped undo steps (e.g., one stroke = one undo)
+
+  [ ] Mirror/symmetry drawing
+      - Horizontal mirror
+      - Vertical mirror
+      - Quad symmetry (4-way)
+      - Radial symmetry
+
+--- LOW PRIORITY ---
+
+  [ ] Tile mode
+      - See tiles repeat when drawing near edges
+      - Useful for game tilesets
+
+  [ ] Reference image overlay
+      - Import a reference image
+      - Adjust opacity/position
+      - Toggle visibility
+
+  [ ] Color harmony tools
+      - Complementary, triadic, analogous selectors
+      - Color wheel picker
+      - HSL sliders
+
+  [ ] Pixel-perfect mode
+      - Auto-thin diagonal lines
+      - Prevent double-pixels on edges
+
+  [ ] Touch improvements
+      - Pressure sensitivity (stylus)
+      - Palm rejection
+      - Customizable touch shortcuts
+
+  [ ] Export improvements
+      - Spritesheet export (grid layout)
+      - Animated GIF export
+      - SVG export
+      - Copy to clipboard as image
+
+  [ ] Collaboration
+      - Real-time collaborative editing
+      - Share project via URL
+      - Comment/annotation system
+
+  [ ] Plugin system
+      - Custom tools via plugins
+      - Filter effects (blur, sharpen, dither)
+      - Script automation
+
+
+--- PWA / OFFLINE ---
+
+  [x] Service worker (public/sw.js) — cache-first for assets, network-first
+      for navigation. Caches app shell (index.html, manifest, favicon).
+  [x] Web manifest (public/manifest.webmanifest) — standalone display,
+      theme color, SVG icon with maskable purpose.
+  [x] Registration (src/registerServiceWorker.ts) — production only,
+      skips in dev mode.
+  [x] Apple mobile web app meta tags in index.html.
+
+
+================================================================================
+                      KNOWN ISSUES
+================================================================================
+
+  [ ] Canvas container-query sizing may have quirks on older browsers
+  [ ] Large projects (many saved projects) may slow localStorage
+  [ ] Selection bar z-index may conflict with settings menu on narrow screens
+
+
+================================================================================
+                      VERSION HISTORY
+================================================================================
+
+  v0.1 - Initial layout rework
+    - Top-docked split layout with floating panels
+    - Left tool sidebar (PC)
+    - Always-on pinch/zoom
+    - Animated menus
+    - Canvas sizing via container queries
+
+  v0.0 - Initial prototype
+    - Basic drawing tools
+    - Grid system
+    - Color palette
+    - Export/import
+    - Project management
+    - Quick pins
+    - Selection tools
+
+================================================================================

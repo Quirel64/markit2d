@@ -1697,12 +1697,8 @@ function App() {
         </aside>
 
         <section className="canvas-stage" aria-label="Pixel canvas">
-          {isMenuOpen && (
-            <>
-              <div className="floating-panel-backdrop" onClick={() => setIsMenuOpen(false)} />
-              <div className="floating-panel">{renderActiveMenu()}</div>
-            </>
-          )}
+          <div className={isMenuOpen ? 'floating-panel-backdrop open' : 'floating-panel-backdrop'} onClick={() => setIsMenuOpen(false)} />
+          <div className={isMenuOpen ? 'floating-panel open' : 'floating-panel'}>{renderActiveMenu()}</div>
           <canvas
             aria-label="Drawing surface"
             className={

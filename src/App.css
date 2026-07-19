@@ -181,6 +181,14 @@
   inset: 0;
   z-index: 19;
   background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.floating-panel-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .floating-panel {
@@ -197,6 +205,16 @@
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.floating-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .floating-panel::-webkit-scrollbar {
