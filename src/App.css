@@ -361,6 +361,22 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.palette::-webkit-scrollbar {
+  width: 4px;
+}
+
+.palette::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .swatch {
@@ -629,6 +645,143 @@ button:disabled {
 .selection-bar::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
+}
+
+.palette-bar {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #d6dce7;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
+  max-width: 90vw;
+}
+
+.palette-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.palette-bar-header button {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.palette-bar-header button:hover {
+  color: #334155;
+}
+
+.palette-bar-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.palette-bar-swatches {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  max-width: 60vw;
+  padding: 2px 0;
+}
+
+.palette-bar-swatches::-webkit-scrollbar {
+  height: 4px;
+}
+
+.palette-bar-swatches::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-bar-swatches::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.palette-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.palette-swatch.active {
+  border-color: #334155;
+}
+
+.palette-swatch:hover {
+  transform: scale(1.15);
+}
+
+.add-palette-swatch {
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-palette-swatch:hover {
+  background: #cbd5e1;
+  color: #334155;
+}
+
+.palette-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.palette-header button {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.palette-header button:hover {
+  color: #334155;
+}
+
+.add-swatch {
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-swatch:hover {
+  background: #cbd5e1;
+  color: #334155;
 }
 
 .settings-menu {

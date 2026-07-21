@@ -52,3 +52,10 @@ export type ProjectMeta = {
   createdAt: number
   updatedAt: number
 }
+
+export type Palette = {
+  id: string
+  name: string
+  colors: string[]
+  builtIn?: boolean
+}

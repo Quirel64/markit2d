@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection, ShapeType, ProjectMeta } from './types'
+import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection, ShapeType, ProjectMeta, Palette } from './types'
 import {
   CANVAS_SIZE,
   VIEW_SIZE,
@@ -11,11 +11,13 @@ import {
   TOOLS,
   MENUS,
   STORAGE_KEY,
-  PINNED_COLORS_KEY,
   PINNED_TOOLS_KEY,
   PALETTE,
   SHAPE_PRESETS,
   PROJECT_PREFIX,
+  PALETTES_KEY,
+  ACTIVE_PALETTE_KEY,
+  DEFAULT_PALETTES,
 } from './constants'
 import { makeBlankPixels, clonePixels, indexOf, clamp } from './utils/canvas'
 import { clampViewport, getDistance, getCenter } from './utils/viewport'
@@ -94,19 +96,27 @@ function App() {
   const [tool, setTool] = useState<Tool>('pencil')
   const [color, setColor] = useState(PALETTE[0])
   const [customColor, setCustomColor] = useState(PALETTE[0])
-  const [pinnedColors, setPinnedColors] = useState<string[]>(() => {
-    const saved = window.localStorage.getItem(PINNED_COLORS_KEY)
-    if (!saved) return PALETTE.slice(0, 5)
-
-    try {
-      const parsed = JSON.parse(saved) as unknown
-      if (!Array.isArray(parsed)) return PALETTE.slice(0, 5)
-
-      return parsed.filter((item): item is string => typeof item === 'string' && /^#[0-9a-f]{6}$/i.test(item))
-    } catch {
-      return PALETTE.slice(0, 5)
+  const [palettes, setPalettes] = useState<Palette[]>(() => {
+    const saved = window.localStorage.getItem(PALETTES_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as unknown
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return (parsed as Palette[]).map((p) => ({
+            ...p,
+            colors: [...new Set(p.colors.map((c) => c.toLowerCase()))],
+          }))
+        }
+      } catch { /* ignore */ }
     }
+    return DEFAULT_PALETTES
   })
+  const [activePaletteId, setActivePaletteId] = useState<string>(() => {
+    const saved = window.localStorage.getItem(ACTIVE_PALETTE_KEY)
+    if (saved) return saved
+    return DEFAULT_PALETTES[0].id
+  })
+  const [isPaletteBarOpen, setIsPaletteBarOpen] = useState(false)
   const [pinnedTools, setPinnedTools] = useState<Tool[]>(() => {
     const saved = window.localStorage.getItem(PINNED_TOOLS_KEY)
     if (!saved) return ['pencil', 'eraser', 'fill']
@@ -180,8 +190,12 @@ function App() {
   }, [pixels])
 
   useEffect(() => {
-    window.localStorage.setItem(PINNED_COLORS_KEY, JSON.stringify(pinnedColors))
-  }, [pinnedColors])
+    window.localStorage.setItem(PALETTES_KEY, JSON.stringify(palettes))
+  }, [palettes])
+
+  useEffect(() => {
+    window.localStorage.setItem(ACTIVE_PALETTE_KEY, activePaletteId)
+  }, [activePaletteId])
 
   useEffect(() => {
     window.localStorage.setItem(PINNED_TOOLS_KEY, JSON.stringify(pinnedTools))
@@ -1321,19 +1335,60 @@ function App() {
   }
 
   const pinCurrentColor = () => {
-    setPinnedColors((items) => {
-      const normalized = color.toLowerCase()
-      const nextItems = [normalized, ...items.filter((item) => item.toLowerCase() !== normalized)]
-
-      return nextItems.slice(0, 18)
-    })
-    setStatus('Color pinned')
+    const normalized = color.toLowerCase()
+    setPalettes((prev) =>
+      prev.map((p) => {
+        if (p.id !== activePaletteId) return p
+        const filtered = p.colors.filter((c) => c.toLowerCase() !== normalized)
+        return { ...p, colors: [normalized, ...filtered] }
+      })
+    )
+    setStatus('Color added to palette')
   }
 
   const unpinColor = (targetColor: string) => {
-    setPinnedColors((items) => items.filter((item) => item.toLowerCase() !== targetColor.toLowerCase()))
-    setStatus('Color unpinned')
+    setPalettes((prev) =>
+      prev.map((p) => {
+        if (p.id !== activePaletteId) return p
+        return { ...p, colors: p.colors.filter((c) => c.toLowerCase() !== targetColor.toLowerCase()) }
+      })
+    )
+    setStatus('Color removed from palette')
   }
+
+  const getActivePalette = useCallback((): Palette => {
+    return palettes.find((p) => p.id === activePaletteId) ?? palettes[0]
+  }, [palettes, activePaletteId])
+
+  const cyclePalette = useCallback((direction: 1 | -1) => {
+    const currentIndex = palettes.findIndex((p) => p.id === activePaletteId)
+    const nextIndex = (currentIndex + direction + palettes.length) % palettes.length
+    const next = palettes[nextIndex]
+    setActivePaletteId(next.id)
+    setStatus(`Palette: ${next.name}`)
+  }, [palettes, activePaletteId])
+
+  const savePalette = useCallback((name: string) => {
+    const active = palettes.find((p) => p.id === activePaletteId) ?? palettes[0]
+    const id = `custom-${Date.now()}`
+    const newPalette: Palette = { id, name, colors: [...active.colors] }
+    setPalettes((prev) => [...prev, newPalette])
+    setActivePaletteId(id)
+    setStatus(`Saved palette: ${name}`)
+  }, [palettes, activePaletteId])
+
+  const deletePalette = useCallback((id: string) => {
+    setPalettes((prev) => {
+      const next = prev.filter((p) => p.id !== id)
+      if (next.length === 0) return DEFAULT_PALETTES
+      return next
+    })
+    if (activePaletteId === id) {
+      const fallback = palettes.find((p) => p.id !== id) ?? DEFAULT_PALETTES[0]
+      setActivePaletteId(fallback.id)
+    }
+    setStatus('Palette deleted')
+  }, [activePaletteId, palettes])
 
   const togglePinTool = (toolId: Tool) => {
     setPinnedTools((items) => {
@@ -1565,12 +1620,19 @@ function App() {
           </div>
 
           <div className="control-group">
-            <span className="label">Pinned</span>
+            <div className="palette-header">
+              <button onClick={() => cyclePalette(-1)} title="Previous palette" type="button">◀</button>
+              <span className="label" style={{ flex: 1, textAlign: 'center' }}>{getActivePalette().name}</span>
+              <button onClick={() => cyclePalette(1)} title="Next palette" type="button">▶</button>
+              {!getActivePalette().builtIn && (
+                <button onClick={() => deletePalette(activePaletteId)} title="Delete palette" type="button">✕</button>
+              )}
+            </div>
             <div className="palette">
-              {pinnedColors.map((swatch) => (
+              {getActivePalette().colors.map((swatch) => (
                 <div key={swatch} className="swatch-row">
                   <button
-                    aria-label={`Use pinned ${swatch}`}
+                    aria-label={`Use palette ${swatch}`}
                     className={color.toLowerCase() === swatch.toLowerCase() ? 'swatch active' : 'swatch'}
                     onClick={() => selectColor(swatch)}
                     onContextMenu={(event) => {
@@ -1579,12 +1641,28 @@ function App() {
                       unpinColor(swatch)
                     }}
                     style={{ backgroundColor: swatch }}
-                    title="Tap to use, right-click to unpin"
+                    title="Tap to use, right-click to remove"
                     type="button"
                   />
                 </div>
               ))}
+              <button
+                aria-label="Add current color to palette"
+                className="swatch add-swatch"
+                onClick={pinCurrentColor}
+                title="Add current color"
+                type="button"
+              >
+                +
+              </button>
             </div>
+            <button
+              onClick={() => savePalette(`Palette ${palettes.length + 1}`)}
+              style={{ marginTop: '8px', width: '100%' }}
+              type="button"
+            >
+              Save current colors as palette
+            </button>
           </div>
 
           <div className="control-group">
@@ -1792,8 +1870,8 @@ function App() {
             })}
             <button
               className="quick-pin color-pin"
-              onClick={() => toggleMenu('color')}
-              title="Colors"
+              onClick={() => setIsPaletteBarOpen((prev) => !prev)}
+              title="Palette bar"
               type="button"
             >
               <span className="tool-icon" aria-hidden="true" style={{ background: 'linear-gradient(135deg, #ef4444, #f97316, #facc15, #22c55e, #14b8a6, #38bdf8, #6366f1, #ec4899)' }}>C</span>
@@ -1806,6 +1884,36 @@ function App() {
           </>
         )}
       </div>
+
+      {isPaletteBarOpen && (
+        <div className="palette-bar">
+          <div className="palette-bar-header">
+            <button onClick={() => cyclePalette(-1)} title="Previous palette" type="button">◀</button>
+            <span className="palette-bar-name">{getActivePalette().name}</span>
+            <button onClick={() => cyclePalette(1)} title="Next palette" type="button">▶</button>
+          </div>
+          <div className="palette-bar-swatches">
+            {getActivePalette().colors.map((swatch) => (
+              <button
+                key={swatch}
+                className={color.toLowerCase() === swatch.toLowerCase() ? 'palette-swatch active' : 'palette-swatch'}
+                onClick={() => selectColor(swatch)}
+                style={{ backgroundColor: swatch }}
+                title={swatch}
+                type="button"
+              />
+            ))}
+            <button
+              className="palette-swatch add-palette-swatch"
+              onClick={pinCurrentColor}
+              title="Add current color to palette"
+              type="button"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      )}
 
       <aside className={isSettingsOpen ? 'settings-menu open' : 'settings-menu'} aria-hidden={!isSettingsOpen}>
         <div className="side-menu-header">

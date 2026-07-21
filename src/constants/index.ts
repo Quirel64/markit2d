@@ -1,4 +1,4 @@
-import type { Tool, MenuId, ShapeType } from '../types'
+import type { Tool, MenuId, ShapeType, Palette } from '../types'
 
 export const CANVAS_SIZE = 128
 export const VIEW_SIZE = 768
@@ -48,4 +48,67 @@ export const PALETTE = [
   '#38bdf8',
   '#6366f1',
   '#ec4899',
+]
+
+export const PALETTES_KEY = 'pixel-grid-studio-palettes'
+export const ACTIVE_PALETTE_KEY = 'pixel-grid-studio-active-palette'
+
+export const DEFAULT_PALETTES: Palette[] = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    colors: [...PALETTE],
+    builtIn: true,
+  },
+  {
+    id: 'gameboy',
+    name: 'Gameboy',
+    colors: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
+    builtIn: true,
+  },
+  {
+    id: 'pico8',
+    name: 'Pico-8',
+    colors: [
+      '#000000', '#1d2b53', '#7e2553', '#008751',
+      '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
+      '#ff004d', '#ffa300', '#ffec27', '#00e436',
+      '#29adff', '#83769c', '#ff77a8', '#ffccaa',
+    ],
+    builtIn: true,
+  },
+  {
+    id: 'sweetie16',
+    name: 'Sweetie 16',
+    colors: [
+      '#1a1c2c', '#5d275d', '#b13e53', '#ef7d57',
+      '#ffcd75', '#a7f070', '#38b764', '#257179',
+      '#29366f', '#3b5dc9', '#41a6f6', '#73eff7',
+      '#f4f4f4', '#94b0c2', '#566c86', '#333c57',
+    ],
+    builtIn: true,
+  },
+  {
+    id: 'nes',
+    name: 'NES',
+    colors: [
+      '#626262', '#002497', '#240097', '#480096',
+      '#6a0093', '#91006c', '#a70025', '#9a2000',
+      '#6b3000', '#383d00', '#0b4600', '#004a00',
+      '#004421', '#003579', '#000000',
+      '#adadad', '#0064ff', '#3800ff', '#6e00ff',
+      '#a300cc', '#c91a6c', '#db2a00', '#c44600',
+      '#8c6b00', '#547a00', '#188a00', '#008b30',
+      '#007ea5',
+      '#ffffff', '#5eb5ff', '#8a7eff', '#b96aff',
+      '#e05aff', '#ff5ec3', '#ff7357', '#ff9a3e',
+      '#ffbe3b', '#dff83b', '#7bf843', '#39f85f',
+      '#2af4b9', '#3b9dff', '#6e6e6e',
+      '#b5d9ff', '#c3c0ff', '#d5b0ff',
+      '#e8b0ff', '#ffb0e0', '#ffb8b0', '#ffcfb0',
+      '#ffe1b0', '#efffb0', '#b5f8b9', '#b0ffe0',
+      '#b0fef5', '#b0e0ff', '#c8c8c8',
+    ],
+    builtIn: true,
+  },
 ]
