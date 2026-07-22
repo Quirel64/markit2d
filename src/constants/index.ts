@@ -36,6 +36,7 @@ export const PINNED_COLORS_KEY = 'pixel-grid-studio-pinned-colors'
 export const PINNED_TOOLS_KEY = 'pixel-grid-studio-pinned-tools'
 export const PROJECTS_INDEX_KEY = 'pixel-grid-studio-projects'
 export const PROJECT_PREFIX = 'pixel-grid-studio-project-'
+export const HIDDEN_BUILTINS_KEY = 'pixel-grid-studio-hidden-builtins'
 
 export const PALETTE = [
   '#111827',

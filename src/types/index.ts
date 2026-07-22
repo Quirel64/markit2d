@@ -59,3 +59,17 @@ export type Palette = {
   colors: string[]
   builtIn?: boolean
 }
+
+export type PalettePayload = {
+  name: string
+  colors: string[]
+}
+
+export type ProjectPayloadV3 = {
+  version: 3
+  width: number
+  height: number
+  palette: string[]
+  runs: Array<[number, number]>
+  userPalettes: PalettePayload[]
+}

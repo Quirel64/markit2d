@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection, ShapeType, ProjectMeta, Palette } from './types'
+import type { Tool, Pixel, MenuId, Viewport, PointerPoint, GestureState, FloatingSelection, ShapeType, ProjectMeta, Palette, PalettePayload } from './types'
 import {
   CANVAS_SIZE,
   VIEW_SIZE,
@@ -17,12 +17,13 @@ import {
   PROJECT_PREFIX,
   PALETTES_KEY,
   ACTIVE_PALETTE_KEY,
+  HIDDEN_BUILTINS_KEY,
   DEFAULT_PALETTES,
 } from './constants'
 import { makeBlankPixels, clonePixels, indexOf, clamp } from './utils/canvas'
 import { clampViewport, getDistance, getCenter } from './utils/viewport'
-import { hexToRgb, shiftColor } from './utils/color'
-import { encodeProject, decodeProject, listProjects, loadProject, saveProject, deleteProject, createProject, updateProject, isCanvasBlank } from './utils/project'
+import { hexToRgb, shiftColor, parseHexFile, parseGplFile } from './utils/color'
+import { encodeProject, decodeProject, listProjects, loadProject, saveProject, deleteProject, createProject, updateProject, isCanvasBlank, encodePalette, decodePalette } from './utils/project'
 import { findPixelPath } from './utils/pathfinding'
 
 const PREVIEW_SIZE = 48
@@ -46,7 +47,7 @@ function ProjectPreview({ projectId }: { projectId: string }) {
     if (!raw) return
 
     try {
-      const pixels = decodeProject(raw)
+      const { pixels } = decodeProject(raw)
       const artCanvas = document.createElement('canvas')
       artCanvas.width = CANVAS_SIZE
       artCanvas.height = CANVAS_SIZE
@@ -77,6 +78,7 @@ function ProjectPreview({ projectId }: { projectId: string }) {
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const paletteFileInputRef = useRef<HTMLInputElement | null>(null)
   const isDrawingRef = useRef(false)
   const lastPaintedRef = useRef<string | null>(null)
   const activePointersRef = useRef(new Map<number, PointerPoint>())
@@ -88,7 +90,7 @@ function App() {
     if (!saved) return makeBlankPixels()
 
     try {
-      return decodeProject(saved)
+      return decodeProject(saved).pixels
     } catch {
       return makeBlankPixels()
     }
@@ -117,6 +119,19 @@ function App() {
     return DEFAULT_PALETTES[0].id
   })
   const [isPaletteBarOpen, setIsPaletteBarOpen] = useState(false)
+  const [hiddenBuiltIns, setHiddenBuiltIns] = useState<Set<string>>(() => {
+    const saved = window.localStorage.getItem(HIDDEN_BUILTINS_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as unknown
+        if (Array.isArray(parsed)) return new Set(parsed as string[])
+      } catch { /* ignore */ }
+    }
+    return new Set()
+  })
+  const [renamingPaletteId, setRenamingPaletteId] = useState<string | null>(null)
+  const [renamingPaletteName, setRenamingPaletteName] = useState('')
+  const [isPaletteListOpen, setIsPaletteListOpen] = useState(false)
   const [pinnedTools, setPinnedTools] = useState<Tool[]>(() => {
     const saved = window.localStorage.getItem(PINNED_TOOLS_KEY)
     if (!saved) return ['pencil', 'eraser', 'fill']
@@ -150,6 +165,8 @@ function App() {
   const [history, setHistory] = useState<Pixel[][]>([])
   const [future, setFuture] = useState<Pixel[][]>([])
   const [projectCode, setProjectCode] = useState('')
+  const [paletteCode, setPaletteCode] = useState('')
+  const [pendingImportPalettes, setPendingImportPalettes] = useState<PalettePayload[] | null>(null)
   const [status, setStatus] = useState('Ready')
   const [activeMenu, setActiveMenu] = useState<MenuId>('tools')
   const [isMenuOpen, setIsMenuOpen] = useState(true)
@@ -196,6 +213,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(ACTIVE_PALETTE_KEY, activePaletteId)
   }, [activePaletteId])
+
+  useEffect(() => {
+    window.localStorage.setItem(HIDDEN_BUILTINS_KEY, JSON.stringify([...hiddenBuiltIns]))
+  }, [hiddenBuiltIns])
 
   useEffect(() => {
     window.localStorage.setItem(PINNED_TOOLS_KEY, JSON.stringify(pinnedTools))
@@ -1244,8 +1265,45 @@ function App() {
     event.target.value = ''
   }
 
+  const handlePaletteFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = reader.result as string
+      let colors: string[]
+      let paletteName: string
+
+      if (file.name.endsWith('.gpl')) {
+        const parsed = parseGplFile(text)
+        colors = parsed.colors
+        paletteName = parsed.name
+      } else {
+        colors = parseHexFile(text)
+        paletteName = file.name.replace(/\.[^.]+$/, '')
+      }
+
+      if (colors.length === 0) {
+        setStatus('No colors found in file')
+        return
+      }
+
+      const id = `custom-${Date.now()}`
+      const newPalette: Palette = { id, name: paletteName, colors }
+      setPalettes((prev) => [...prev, newPalette])
+      setActivePaletteId(id)
+      setStatus(`Imported ${colors.length} colors from ${paletteName}`)
+    }
+    reader.readAsText(file)
+    event.target.value = ''
+  }
+
   const copyProjectCode = async () => {
-    const code = encodeProject(pixels)
+    const userPalettes = palettes
+      .filter((p) => !p.builtIn)
+      .map((p) => ({ name: p.name, colors: p.colors }))
+    const code = encodeProject(pixels, userPalettes.length > 0 ? userPalettes : undefined)
     setProjectCode(code)
 
     try {
@@ -1258,12 +1316,60 @@ function App() {
 
   const loadProjectCode = () => {
     try {
-      const nextPixels = decodeProject(projectCode)
+      const result = decodeProject(projectCode)
       pushHistory()
-      setPixels(nextPixels)
+      setPixels(result.pixels)
+      setProjectCode('')
       setStatus('Project code loaded')
+
+      if (result.userPalettes.length > 0) {
+        setPendingImportPalettes(result.userPalettes)
+      }
     } catch {
       setStatus('That project code could not be loaded')
+    }
+  }
+
+  const acceptImportedPalettes = () => {
+    if (!pendingImportPalettes) return
+    const newPalettes: Palette[] = pendingImportPalettes.map((p, i) => ({
+      id: `imported-${Date.now()}-${i}`,
+      name: p.name,
+      colors: [...new Set(p.colors.map((c) => c.toLowerCase()))],
+    }))
+    setPalettes((prev) => [...prev, ...newPalettes])
+    setPendingImportPalettes(null)
+    setStatus(`Added ${newPalettes.length} palette(s)`)
+  }
+
+  const loadPaletteCode = () => {
+    try {
+      const payload = decodePalette(paletteCode)
+      const id = `imported-${Date.now()}`
+      const newPalette: Palette = {
+        id,
+        name: payload.name,
+        colors: [...new Set(payload.colors.map((c) => c.toLowerCase()))],
+      }
+      setPalettes((prev) => [...prev, newPalette])
+      setActivePaletteId(id)
+      setPaletteCode('')
+      setStatus(`Imported palette: ${payload.name}`)
+    } catch {
+      setStatus('Invalid palette code')
+    }
+  }
+
+  const copyActivePaletteCode = async () => {
+    const active = getActivePalette()
+    const code = encodePalette(active.name, active.colors)
+
+    try {
+      await navigator.clipboard.writeText(code)
+      setStatus('Palette code copied')
+    } catch {
+      setPaletteCode(code)
+      setStatus('Palette code ready to copy')
     }
   }
 
@@ -1389,6 +1495,20 @@ function App() {
     }
     setStatus('Palette deleted')
   }, [activePaletteId, palettes])
+
+  const renamePalette = useCallback((id: string, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setPalettes((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)))
+  }, [])
+
+  const toggleBuiltInVisibility = useCallback(() => {
+    const allBuiltIn = DEFAULT_PALETTES.map((p) => p.id)
+    setHiddenBuiltIns((prev) => {
+      if (prev.size === allBuiltIn.length) return new Set()
+      return new Set(allBuiltIn)
+    })
+  }, [])
 
   const togglePinTool = (toolId: Tool) => {
     setPinnedTools((items) => {
@@ -1620,14 +1740,124 @@ function App() {
           </div>
 
           <div className="control-group">
-            <div className="palette-header">
-              <button onClick={() => cyclePalette(-1)} title="Previous palette" type="button">◀</button>
-              <span className="label" style={{ flex: 1, textAlign: 'center' }}>{getActivePalette().name}</span>
-              <button onClick={() => cyclePalette(1)} title="Next palette" type="button">▶</button>
-              {!getActivePalette().builtIn && (
-                <button onClick={() => deletePalette(activePaletteId)} title="Delete palette" type="button">✕</button>
-              )}
-            </div>
+            <button
+              className="palette-section-toggle"
+              onClick={() => setIsPaletteListOpen((prev) => !prev)}
+              type="button"
+            >
+              <span className="label">Palettes</span>
+              <span className="palette-toggle-name">{getActivePalette().name}</span>
+              <div className="palette-strip">
+                {getActivePalette().colors.slice(0, 8).map((c) => (
+                  <span
+                    className="palette-strip-swatch"
+                    key={c}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+                {getActivePalette().colors.length > 8 && (
+                  <span className="palette-strip-more">+{getActivePalette().colors.length - 8}</span>
+                )}
+              </div>
+              <span className="palette-toggle-chevron">{isPaletteListOpen ? '▲' : '▼'}</span>
+            </button>
+            {isPaletteListOpen && (
+              <>
+                <div className="palette-list">
+                  {palettes
+                    .filter((p) => !p.builtIn || !hiddenBuiltIns.has(p.id))
+                    .map((p) => (
+                      <div
+                        key={p.id}
+                        className={p.id === activePaletteId ? 'palette-row active' : 'palette-row'}
+                        onClick={() => {
+                          setActivePaletteId(p.id)
+                          setStatus(`Palette: ${p.name}`)
+                        }}
+                      >
+                        <span className="palette-row-indicator">{p.id === activePaletteId ? '★' : ''}</span>
+                        {renamingPaletteId === p.id ? (
+                          <input
+                            autoFocus
+                            className="palette-rename-input"
+                            onBlur={() => {
+                              renamePalette(p.id, renamingPaletteName)
+                              setRenamingPaletteId(null)
+                            }}
+                            onChange={(e) => setRenamingPaletteName(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                renamePalette(p.id, renamingPaletteName)
+                                setRenamingPaletteId(null)
+                              }
+                              if (e.key === 'Escape') setRenamingPaletteId(null)
+                            }}
+                            value={renamingPaletteName}
+                          />
+                        ) : (
+                          <span className="palette-row-name">{p.name}</span>
+                        )}
+                        <div className="palette-strip">
+                          {p.colors.slice(0, 8).map((c) => (
+                            <span
+                              className="palette-strip-swatch"
+                              key={c}
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                          {p.colors.length > 8 && <span className="palette-strip-more">+{p.colors.length - 8}</span>}
+                        </div>
+                        <div className="palette-row-actions" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="palette-action-btn"
+                            onClick={() => {
+                              setRenamingPaletteId(p.id)
+                              setRenamingPaletteName(p.name)
+                            }}
+                            title="Rename"
+                            type="button"
+                          >
+                            ✎
+                          </button>
+                          {!p.builtIn && (
+                            <button
+                              className="palette-action-btn danger"
+                              onClick={() => deletePalette(p.id)}
+                              title="Delete"
+                              type="button"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                <div className="palette-list-actions">
+                  <button onClick={() => savePalette(`Palette ${palettes.length + 1}`)} type="button">
+                    + New palette
+                  </button>
+                  <button onClick={() => paletteFileInputRef.current?.click()} type="button">
+                    Import .hex / .gpl
+                  </button>
+                  <button onClick={toggleBuiltInVisibility} type="button">
+                    {hiddenBuiltIns.size === DEFAULT_PALETTES.length ? 'Show built-in' : 'Hide built-in'}
+                  </button>
+                </div>
+                <input
+                  accept=".hex,.gpl"
+                  className="hidden-input"
+                  onChange={handlePaletteFileImport}
+                  ref={paletteFileInputRef}
+                  type="file"
+                />
+              </>
+            )}
+          </div>
+
+          <div className="control-group">
+            <span className="label">{getActivePalette().name} colors</span>
             <div className="palette">
               {getActivePalette().colors.map((swatch) => (
                 <div key={swatch} className="swatch-row">
@@ -1656,13 +1886,6 @@ function App() {
                 +
               </button>
             </div>
-            <button
-              onClick={() => savePalette(`Palette ${palettes.length + 1}`)}
-              style={{ marginTop: '8px', width: '100%' }}
-              type="button"
-            >
-              Save current colors as palette
-            </button>
           </div>
 
           <div className="control-group">
@@ -2070,11 +2293,33 @@ function App() {
                 <textarea
                   id="project-code"
                   onChange={(event) => setProjectCode(event.target.value)}
-                  placeholder="Paste a PGS2 project code"
+                  placeholder="Paste a PGS2/PGS3 project code"
                   value={projectCode}
                 />
                 <button onClick={loadProjectCode} type="button">
                   Load project
+                </button>
+              </div>
+
+              <div className="control-group">
+                <span className="label">Palette sharing</span>
+                <button onClick={copyActivePaletteCode} type="button">
+                  Copy active palette code
+                </button>
+              </div>
+
+              <div className="control-group project-code">
+                <label className="label" htmlFor="palette-code">
+                  Import palette
+                </label>
+                <textarea
+                  id="palette-code"
+                  onChange={(event) => setPaletteCode(event.target.value)}
+                  placeholder="Paste a PGSP palette code"
+                  value={paletteCode}
+                />
+                <button onClick={loadPaletteCode} type="button">
+                  Import palette
                 </button>
               </div>
 
@@ -2087,6 +2332,27 @@ function App() {
           )}
         </div>
       </aside>
+
+      {pendingImportPalettes && (
+        <div className="palette-import-prompt">
+          <p>This project includes {pendingImportPalettes.length} custom palette(s):</p>
+          <ul>
+            {pendingImportPalettes.map((p) => (
+              <li key={p.name}>
+                {p.name} ({p.colors.length} colors)
+              </li>
+            ))}
+          </ul>
+          <div className="palette-import-actions">
+            <button onClick={acceptImportedPalettes} type="button">
+              Add to my palettes
+            </button>
+            <button onClick={() => setPendingImportPalettes(null)} type="button">
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

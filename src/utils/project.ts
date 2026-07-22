@@ -1,4 +1,4 @@
-import type { Pixel, ProjectPayloadV1, ProjectPayloadV2, ProjectMeta } from '../types'
+import type { Pixel, ProjectPayloadV1, ProjectPayloadV2, ProjectPayloadV3, ProjectMeta, PalettePayload } from '../types'
 import { CANVAS_SIZE, PROJECTS_INDEX_KEY, PROJECT_PREFIX } from '../constants'
 
 const toBase64Url = (value: string): string =>
@@ -52,7 +52,42 @@ const decodeProjectV2 = (encoded: string): Pixel[] => {
   return decoded
 }
 
-export const encodeProject = (pixels: Pixel[]): string => {
+const decodeProjectV3 = (encoded: string): { pixels: Pixel[]; userPalettes: PalettePayload[] } => {
+  const payload = JSON.parse(fromBase64Url(encoded)) as ProjectPayloadV3
+
+  if (
+    payload.version !== 3 ||
+    payload.width !== CANVAS_SIZE ||
+    payload.height !== CANVAS_SIZE ||
+    !Array.isArray(payload.palette) ||
+    !Array.isArray(payload.runs)
+  ) {
+    throw new Error('Unsupported project code')
+  }
+
+  const decoded = payload.runs.flatMap(([paletteIndex, count]) => {
+    const fill = paletteIndex === 0 ? null : payload.palette[paletteIndex - 1]
+    return Array<Pixel>(count).fill(typeof fill === 'string' ? fill : null)
+  })
+
+  if (decoded.length !== CANVAS_SIZE * CANVAS_SIZE) {
+    throw new Error('Unsupported project code')
+  }
+
+  return {
+    pixels: decoded,
+    userPalettes: (payload.userPalettes ?? []).filter(
+      (p) => Array.isArray(p.colors) && typeof p.name === 'string',
+    ),
+  }
+}
+
+export type ProjectDecodeResult = {
+  pixels: Pixel[]
+  userPalettes: PalettePayload[]
+}
+
+export const encodeProject = (pixels: Pixel[], userPalettes?: PalettePayload[]): string => {
   const palette = Array.from(new Set(pixels.filter((pixel): pixel is string => Boolean(pixel))))
   const colorIndexes = new Map(palette.map((pixel, index) => [pixel, index + 1]))
   const runs: Array<[number, number]> = []
@@ -68,6 +103,18 @@ export const encodeProject = (pixels: Pixel[]): string => {
     }
   }
 
+  if (userPalettes && userPalettes.length > 0) {
+    const payload: ProjectPayloadV3 = {
+      version: 3,
+      width: CANVAS_SIZE,
+      height: CANVAS_SIZE,
+      palette,
+      runs,
+      userPalettes,
+    }
+    return `PGS3:${toBase64Url(JSON.stringify(payload))}`
+  }
+
   const payload: ProjectPayloadV2 = {
     version: 2,
     width: CANVAS_SIZE,
@@ -79,15 +126,38 @@ export const encodeProject = (pixels: Pixel[]): string => {
   return `PGS2:${toBase64Url(JSON.stringify(payload))}`
 }
 
-export const decodeProject = (code: string): Pixel[] => {
+export const decodeProject = (code: string): ProjectDecodeResult => {
   const trimmed = code.trim()
   const prefix = trimmed.slice(0, 5).toUpperCase()
   const encoded = trimmed.slice(5)
 
-  if (prefix === 'PGS2:') return decodeProjectV2(encoded)
-  if (prefix === 'PGS1:') return decodeProjectV1(encoded)
+  if (prefix === 'PGS3:') return decodeProjectV3(encoded)
+  if (prefix === 'PGS2:') return { pixels: decodeProjectV2(encoded), userPalettes: [] }
+  if (prefix === 'PGS1:') return { pixels: decodeProjectV1(encoded), userPalettes: [] }
 
-  return decodeProjectV1(trimmed)
+  return { pixels: decodeProjectV1(trimmed), userPalettes: [] }
+}
+
+export const encodePalette = (name: string, colors: string[]): string => {
+  const payload: PalettePayload = { name, colors }
+  return `PGSP:${toBase64Url(JSON.stringify(payload))}`
+}
+
+export const decodePalette = (code: string): PalettePayload => {
+  const trimmed = code.trim()
+
+  if (!trimmed.startsWith('PGSP:')) {
+    throw new Error('Not a palette code')
+  }
+
+  const encoded = trimmed.slice(5)
+  const payload = JSON.parse(fromBase64Url(encoded)) as PalettePayload
+
+  if (!Array.isArray(payload.colors) || typeof payload.name !== 'string') {
+    throw new Error('Invalid palette code')
+  }
+
+  return { name: payload.name, colors: payload.colors }
 }
 
 const hasPixels = (pixels: Pixel[]): boolean => pixels.some((p) => p !== null)
@@ -120,7 +190,7 @@ export const loadProject = (id: string): Pixel[] | null => {
   const raw = window.localStorage.getItem(PROJECT_PREFIX + id)
   if (!raw) return null
   try {
-    return decodeProject(raw)
+    return decodeProject(raw).pixels
   } catch {
     return null
   }

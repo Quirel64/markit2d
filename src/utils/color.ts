@@ -84,3 +84,34 @@ export const shiftColor = (hex: string, shift: Partial<HslColor>) => {
     lightness: clamp(hsl.lightness + (shift.lightness ?? 0), 0.04, 0.96),
   })
 }
+
+export const parseHexFile = (text: string): string[] => {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[#]?[0-9a-f]{6}$/i.test(line))
+    .map((line) => (line.startsWith('#') ? line.toLowerCase() : `#${line.toLowerCase()}`))
+}
+
+export const parseGplFile = (text: string): { name: string; colors: string[] } => {
+  const lines = text.split(/\r?\n/)
+  let name = 'Imported Palette'
+  const colors: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('Name:')) {
+      name = trimmed.slice(5).trim() || name
+      continue
+    }
+    if (trimmed === '#' || trimmed.startsWith('GIMP') || trimmed.startsWith('Columns:')) continue
+    const match = trimmed.match(/^(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/)
+    if (match) {
+      const [, r, g, b] = match.map(Number)
+      const hex = '#' + [r, g, b].map((c) => clamp(c, 0, 255).toString(16).padStart(2, '0')).join('')
+      colors.push(hex.toLowerCase())
+    }
+  }
+
+  return { name, colors: [...new Set(colors)] }
+}
